@@ -1,134 +1,178 @@
 Compact Float Format
 ====================
 
-Compact float format (CFF) is an encoding scheme to store a floating point value in as few bytes as possible for data transmission. This format supports all values that can be stored in 128 bit ieee754 floating point values (decimal and binary).
-
-CFF can store all of the kinds of values that ieee754 can without data loss:
-* Normalized values
-* Subnormal values
-* Positive and negative 0
-* Positive and negative infinity
-* NaNs (not a number)
-
-Smaller size priority is generally given to the more common values.
+Compact float format (CFF) is an encoding scheme to store a floating point value in as few bytes as possible for data transmission. This format supports all values that can be stored in ieee754 decimal and binary floating point values.
 
 
 
 Encoded Structure
 -----------------
 
-A compact floating point number is stored as a series of bitfields, the whole of which are then encoded as a [VLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md).
+The encoded floating point structure contains an 8-bit header, followed by a possible exponent, and a possible significand:
+
+| Field       | Bytes |
+| ----------- | ----- |
+| Header      |     1 |
+| Exponent    |   0-3 |
+| Significand |  0-30 |
 
 The general conceptual form of a floating point number is:
 
-    value = significand * base ^ exponent
+    value = sign * significand * base ^ (signed exponent)
 
-Where the base is 2 for binary floating point numbers and 10 for decimal floating point numbers.
+Where the base is `2` for binary floating point numbers and `10` for decimal floating point numbers.
 
-Note: The encoded structure does not contain overall type information (i.e. whether this is a binary or decimal floating point value).
-
-
-### Fields
-
-The following fields are always present:
-
-| Field            | Bits | Order | Notes                                     |
-| ---------------- | ---- | ----- | ----------------------------------------- |
-| Significand Sign |    1 | First | 0 = positive, 1 = negative                |
-| Exponent Sign    |    1 |       | 0 = positive, 1 = negative                |
-| Exponent Size    |    4 |       | Valid range 1-14. 0, 15 = special meaning |
-| Payload          |    * | Last  | Contents determined by value type         |
-
-#### Exponent Sign
-
-Determines the sign of the exponent field: 0 = positive, 1 = negative.
-
-#### Significand sign
-
-Determines the sign of the significand field: 0 = positive, 1 = negative.
-
-#### Exponent Size
-
-Determines how many bits of exponent data will exist between this field and the significand field. The valid range is 1-14 bits, with values 0 and 15 representing special cases:
-
-##### Exponent Size 0
-
-The payload field is empty, and the significand and exponent sign fields determine the final value:
-
-|Exponent Sign | Significand Sign | Value     |
-|------------- | ---------------- | --------- |
-|      0       |         0        | +0        |
-|      0       |         1        | -0        |
-|      1       |         0        | +infinity |
-|      1       |         1        | -infinity |
-
-##### Exponent Size 15
-
-The exponent sign field determines the kind of value:
-
-|Exponent Sign | Notes              |
-|------------- | ------------------ |
-|      1       | Subnormal Value    |
-|      0       | Not a Number (NaN) |
-
-#### Payload
-
-The payload contents depend on what kind of value this is.
+Note: The encoded floating point structure does not contain information about whether it's a binary or decimal floating point value.
 
 
+### Header Fields
 
-### Normalized Value
+| Field               | Bits  | Order | Notes                                |
+| ------------------- | ----- | ----- | ------------------------------------ |
+| Sign                |     1 | High  | 0 = positive, 1 = negative           |
+| Special Value       |     1 |       | 0 = normal number, 1 = special value |
+| Exponent Size       |     2 |       |                                      |
+| Significand Size    |     4 | Low   | Value 15 = significand size 30       |
 
-Normalized values have the following payload contents:
+#### Sign Field
 
-| Field            | Bits | Order | Notes                                     |
-| ---------------- | ---- | ----- | ----------------------------------------- |
-| Exponent         |    * | First | Bit width determined by exponent size     |
-| Significand      |    * | Last  |                                           |
+Determines whether the number is positive or negative: 0 = positive, 1 = negative.
 
-#### Exponent
+#### Special Value Field
 
-Determines the amount that the base of the number (either 2 or 10) will be exponentially raised to.
+Determines whether this is a normal number or a special value: 0 = normal, 1 = special.
 
-#### Significand
+See [Normal Numbers](#normal-numbers) and [Special Values](#special-values)
 
-The significand is interpreted as a normalized value, meaning a single, whole, nonzero digit, with the remainder of the value representing a fractional component:
+#### Exponent Size Field
 
-    1.[fractional component] (binary)
-    (1-9).[fractional component] (decimal)
+Determines the size of the exponent payload in bytes.
 
-As well, since the signifiand is always normalized, the initial `1` bit is implied (not actually stored in the significand field).
+#### Significand Size Field
 
-##### Example: Significand field = 01101001
+Determines the size of the significand payload in bytes.
 
-Decimal FP:
-
-    Field: 01101001
-    Add implied 1: 101101001 (361 in decimal)
-    Result = 3.61 (3 + 6/10 + 1/100)
-
-Binary FP:
-
-    Field: 01101001
-    Add implied 1: 101101001
-    Result = 1.01101001 (1 + 1/4 + 1/8 + 1/32 + 1/256 = 1.41015625 in decimal)
+As a special case, if `significand size` is 15, the actual significand payload size is 30 (to support 256 bit float).
 
 
+### Exponent Payload
 
-### Subnormal Value
+Contains the exponent value, encoded as a little endian signed 2's complement integer (without bias).
 
-A subnormal value indicates that the original value before encoding was a subnormal value. The value must be normalized for storage in the compact float, and then encoded in the same manner as a normalized value, with exponent size 15 and a negative exponent sign.
+### Significand Payload
+
+Contains the significand value, encoding the same bit patterns as the original ieee754 value, stored in little endian byte order. The value is left-justified (meaning that all low order zero bytes have been omitted).
+
+
+### Normal Numbers
+
+Normal numbers operate on the same principle as in ieee754: A sign, an exponent, and a significand with an implied leading `1` bit. The only difference is that compact float encodes the exponent as a 2's complement integer with no bias applied.
+
+
+### Special Values
+
+When the `normal number` field is 0, the other fields encode different meanings:
+
+| Significand Size | Exponent Size | Sign | Data Type | Value     | Notes                              |
+| ---------------- | ------------- | ---- | --------- | --------- | ---------------------------------- |
+|                0 |             0 |    0 | normal    |        +0 | No exponent or significand payload |
+|                0 |             0 |    1 | normal    |        -0 | No exponent or significand payload |
+|                0 |             1 |    0 | normal    | +infinity | No exponent or significand payload |
+|                0 |             1 |    1 | normal    | -infinity | No exponent or significand payload |
+|              > 0 |             0 |    * | NaN       |         * | No exponent payload                |
+|              > 0 |           > 0 |    * | subnormal |         * |                                    |
+
+#### +- 0
+
+There is no exponent or significand payload. Sign is determined by the sign field.
+
+#### +- Infinity
+
+There is no exponent or significand payload. Sign is determined by the sign field.
+
+#### NaN Values
+
+There is no exponent payload. The significand payload is the same as in the original ieee754 float value.
+
+#### Subnormal Values
+
+The significand payload is the same as in the original ieee754 float value. As in ieee754, there is no implied leading `1` bit for subnormals.
+
+The exponent field is set to the minimum exponent value of the original type and size (the value that would encode to 0 after the bias is applied):
+
+| Type    | Size | Subnormal Exponent |
+| ------- | ---- | ------------------ |
+| Binary  |   16 |                -14 |
+| Binary  |   32 |               -126 |
+| Binary  |   64 |              -1022 |
+| Binary  |  128 |             -16382 |
+| Binary  |  256 |            -262142 |
+| Decimal |   32 |                -95 |
+| Decimal |   64 |               -383 |
+| Decimal |  128 |              -6143 |
 
 
 
-### Not a Number
+Decimal Floating Point Encoding
+-------------------------------
 
-NaNs have the following payload contents:
+IEEE754 defines two kinds of decimal floating point encodings (Densely Packed Decimal and Binary Decimal) without a means to automatically differentiate between them. For the purposes of this spec, all decimal floating point significands must be encoded in densely packed decimal format.
 
-| Field   | Bits | Order | Notes                    |
-| ------- | ---- | ----- | ------------------------ |
-| Quiet   |  1   | First | 0 = signaling, 1 = quiet |
-| Payload |  *   | Last  | Typically 0              |
+
+
+Examples
+--------
+
+### Value 1.3769248e-20
+
+    32-bit ieee754 binary: 0x1e820c00 (0 00111101 00000100000110000000000)
+    Sign bit: 0
+    Exponent: 0x3d (61)
+
+Convert the exponent to a signed int and subtract the bias:
+
+    exponent = signed(61) - 127 = -66 (0xbe)
+
+Strip trailing zero bytes from the significand:
+
+    Original: 00000100000110000000000
+    Stripped: 000001000001100 = 0x4c
+
+Build header:
+
+    Sign: 0
+    Special: 0
+    Exponent bytes: 1
+    Significand bytes: 1
+    Result: 00010001 = 0x11
+
+Result: `[11 be 4c]`
+
+
+### Value -2.03703597633448608627e+90
+
+    64 bit ieee754 binary: 0xd2b0000000000000 (1 10100101011 00000000...)
+    Sign bit: 1
+    Exponent: 0x52d (1325)
+
+Convert the exponent to a signed int and subtract the bias:
+
+    exponent = signed(1325) - 1023 = 302 (0x12e)
+
+Strip trailing zero bytes from the significand:
+
+    Original: 0000 00000000 00000000 00000000 00000000 00000000 00000000
+    Stripped: [empty]
+
+Build header:
+
+    Sign: 1
+    Special: 0
+    Exponent bytes: 2
+    Significand bytes: 0
+    Result: 10100000 = 0xb0
+
+Result: `[b0 2e 01]`
 
 
 
