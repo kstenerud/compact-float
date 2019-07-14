@@ -3,11 +3,13 @@ Compact Float Format
 
 Compact float format (CFF) is an encoding scheme to store a floating point value in as few bytes as possible for data transmission. CFF supports all values that can be stored in any sized ieee754 decimal and binary floating point encoding.
 
-The general conceptual form of a floating point number is:
-
-    value = sign * significand * base ^ exponent
-
-Where `base` is `2` for binary floating point numbers and `10` for decimal floating point numbers.
+CFF can store all of the kinds of values that ieee754 can, without data loss:
+* Binary and decimal floating point values
+* Normal values
+* Subnormal values
+* ±0
+* ±infinity
+* Signaling and quiet NaNs, including payload
 
 Note: CFF does not store meta data about what kind of floating point value is contained within (decimal or binary).
 
@@ -16,7 +18,13 @@ Note: CFF does not store meta data about what kind of floating point value is co
 Encoded Structure
 -----------------
 
-A floating point value is encoded into one or two [VLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
+The general conceptual form of a floating point number is:
+
+    value = sign * significand * base ^ exponent
+
+Where `base` is `2` for binary floating point numbers and `10` for decimal floating point numbers.
+
+A CFF value is encoded into one or two [VLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
 
     [Exponent VLQ]
 
