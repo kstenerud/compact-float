@@ -9,7 +9,7 @@ The general conceptual form of a floating point number is:
 
 Where `base` is `2` for binary floating point numbers and `10` for decimal floating point numbers.
 
-Note: CFF does not store metadata about what kind of floating point value is contained within (decimal or binary).
+Note: CFF does not store meta data about what kind of floating point value is contained within (decimal or binary).
 
 
 
@@ -27,7 +27,7 @@ or:
 
 ### Exponent VLQ
 
-The exponent VLQ is a bitfield containing the significand sign, exponent sign, and exponent magnitude:
+The exponent VLQ is a bit field containing the significand sign, exponent sign, and exponent magnitude:
 
 | Field              | Bits | Notes                      |
 | ------------------ | ---- | -------------------------- |
@@ -100,7 +100,7 @@ Normal Numbers
 
 Normal numbers operate on the same principle as in ieee754: A signed exponent, and a signed significand.
 
-As in ieee754, binary floating point values are left-justifed and have an implied leading `1` bit. Decimal floating point values are right-justified and have no implied bits. Binary floating point values must always be normalized, even if they are being encoded from subnormal values. Decimal floating point values are never normalized.
+As in ieee754, binary floating point values are left-justified and have an implied leading `1` bit. Decimal floating point values are right-justified and have no implied bits. Binary floating point values must always be normalized, even if they are being encoded from subnormal values. Decimal floating point values are never normalized.
 
 ### Zero Value
 
@@ -127,16 +127,34 @@ Infinity is encoded using an extended exponent VLQ, encoding the exponent value 
 
 ### NaN
 
-NaN values are encoded using an extended exponent VLQ, encoding the exponent value `-0`. The significand VLQ is encoded in little endian order, and contains whatever bits were in the ieee754 significand, left justified with trailing zero bits omitted.
+NaN values are encoded using an extended exponent VLQ, encoding the exponent value `-0`. The significand VLQ encodes a `signaling bit` and a `NaN payload`, in big endian order.
 
-    10000000 00100000 10001010 00010100 = [80 20 8a 14]
-    = NaN with a left-justified payload of 000101000101
+| Field         | Size | Notes           |
+| ------------- | ---- | --------------- |
+| Signaling Bit |    1 | `1` = signaling |
+| NaN Payload   |   6+ | Right justified |
+
+#### Signaling Bit
+
+The ieee754 spec does not actually require a specific encoding of the first bit of the NaN payload to differentiate signaling from non-signaling binary float NaN values (it says **should** rather than **must**), and the recommended values are the opposite of the signaling bit for decimal floats. CFF harmonizes this for all NaN values:
+
+| Value | Meaning       |
+| ----- | ------------- |
+|   0   | Quiet NaN     |
+|   1   | Signaling NaN |
+
+An implementation must properly convert to/from the underlying encoding of the platform it's running on.
+
+#### NaN Payload
+
+The `NaN payload` field contains the bit pattern after the signaling bit from the original ieee754 value, right-justified, with leading zero bits omitted.
+
+#### Example
+
+    10000000 00100000 10001010 00010100 = [80 20 c9 22]
+    = signaling NaN with a (right-justified) payload of 10010100010
 
 Any encoded value starting with `[80 20]` is a NaN value.
-
-#### Signaling vs Nonsiganling
-
-Signaling and non-signaling NaN values are encoded according to the appropriate ieee754 spec for the given type. The signaling status is preserved because compact float format encodes the NaN payload as-is.
 
 
 ### Subnormal Numbers
@@ -216,7 +234,7 @@ Result: `[d2 70 00]`
 
 ### Decimal float value 1.43
 
-    32 bit iee754 BID: 0x3180008f (0 01 100011 00000000000000010001111)
+    32 bit ieee754 BID: 0x3180008f (0 01 100011 00000000000000010001111)
     Sign bit: 0
     Exponent : 01 100011 (099) - 101 bias = -2
     Significand: 00000000000000010001111 (143)
