@@ -1,155 +1,188 @@
 Compact Float Format
 ====================
 
-Compact float format (CFF) is an encoding scheme to store a floating point value in as few bytes as possible for data transmission. This format supports all values that can be stored in ieee754 decimal and binary floating point values.
+Compact float format (CFF) is an encoding scheme to store a floating point value in as few bytes as possible for data transmission. CFF supports all values that can be stored in any sized ieee754 decimal and binary floating point encoding.
+
+The general conceptual form of a floating point number is:
+
+    value = sign * significand * base ^ exponent
+
+Where `base` is `2` for binary floating point numbers and `10` for decimal floating point numbers.
+
+Note: CFF does not store metadata about what kind of floating point value is contained within (decimal or binary).
 
 
 
 Encoded Structure
 -----------------
 
-The encoded floating point structure contains an 8-bit header, followed by a possible exponent, and a possible significand:
+A floating point value is encoded into one or two [VLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
 
-| Field       | Bytes |
-| ----------- | ----- |
-| Header      |     1 |
-| Exponent    |   0-3 |
-| Significand |  0-30 |
+    [Exponent VLQ]
 
-The general conceptual form of a floating point number is:
+or:
 
-    value = sign * significand * base ^ (signed exponent)
-
-Where the base is `2` for binary floating point numbers and `10` for decimal floating point numbers.
-
-Note: The encoded floating point structure does not contain information about whether it's a binary or decimal floating point value.
+    [Exponent VLQ] [Significand VLQ]
 
 
-### Header Fields
+### Exponent VLQ
 
-| Field               | Bits  | Order | Notes                                |
-| ------------------- | ----- | ----- | ------------------------------------ |
-| Sign                |     1 | High  | 0 = positive, 1 = negative           |
-| Special Value       |     1 |       | 0 = normal number, 1 = special value |
-| Exponent Size       |     2 |       |                                      |
-| Significand Size    |     4 | Low   | Value 15 = significand size 30       |
+The exponent VLQ is a bitfield containing the significand sign, exponent sign, and exponent magnitude:
 
-#### Sign Field
+| Field              | Bits | Notes                      |
+| ------------------ | ---- | -------------------------- |
+| Significand Sign   |    1 | 0 = positive, 1 = negative |
+| Exponent Sign      |    1 | 0 = positive, 1 = negative |
+| Exponent Magnitude |   5+ | Stored as unsigned integer |
 
-Determines whether the number is positive or negative: 0 = positive, 1 = negative.
+`exponent magnitude` is an unsigned integer value (no bias). The `exponent sign` determines the sign of the exponent.
 
-#### Special Value Field
+The normally invalid exponent value `-0` is used to encode a [zero value](#zero-value).
 
-Determines whether this is a normal number or a special value: 0 = normal, 1 = special.
+The exponent VLQ is encoded in big endian order.
 
-See [Normal Numbers](#normal-numbers) and [Special Values](#special-values)
+#### Extended Exponent VLQ
 
-#### Exponent Size Field
+An extended VLQ is a VLQ that is encoded into one more group than is necessary to hold the value. So for example (assuming both sign bits are 0):
 
-Determines the size of the exponent payload in bytes.
+| Exponent Magnitude | Normal    | Extended     |
+| ------------------ | --------- | ------------ |
+|                  0 | `[00]`    | `[80 00]`    |
+|                 37 | `[25]`    | `[80 25]`    |
+|               1000 | `[87 68]` | `[80 87 68]` |
 
-#### Significand Size Field
-
-Determines the size of the significand payload in bytes.
-
-As a special case, if `significand size` is 15, the actual significand payload size is 30 (to support 256 bit float).
-
-
-### Exponent Payload
-
-Contains the exponent value, encoded as a little endian signed 2's complement integer (without bias).
-
-### Significand Payload
-
-Contains the significand value, encoding the same bit patterns as the original ieee754 value, stored in little endian byte order. The value is left-justified (meaning that all low order zero bytes have been omitted).
+When an extended exponent VLQ is encountered, it signifies a [special value](#special-values).
 
 
-### Normal Numbers
+### Significand VLQ
 
-Normal numbers operate on the same principle as in ieee754: A sign, an exponent, and a significand with an implied leading `1` bit. The only difference is that compact float encodes the exponent as a 2's complement integer with no bias applied.
+| Field                 | Bits |
+| --------------------- | ---- |
+| Significand Magnitude |   7+ |
 
+The significand encoding and endianness depends on whether a binary or a decimal floating point value is being encoded:
 
-### Special Values
+#### Binary Floating Point Significand
 
-When the `normal number` field is 0, the other fields encode different meanings:
+The significand is encoded as a fraction with an implied leading `1` bit in the same manner as binary ieee754 significands. Since the value is left-justified, it is encoded in little endian order with trailing zero bits omitted.
 
-| Significand Size | Exponent Size | Sign | Data Type | Value     | Notes                              |
-| ---------------- | ------------- | ---- | --------- | --------- | ---------------------------------- |
-|                0 |             0 |    0 | normal    |        +0 | No exponent or significand payload |
-|                0 |             0 |    1 | normal    |        -0 | No exponent or significand payload |
-|                0 |             1 |    0 | normal    | +infinity | No exponent or significand payload |
-|                0 |             1 |    1 | normal    | -infinity | No exponent or significand payload |
-|              > 0 |             0 |    * | NaN       |         * | No exponent payload                |
-|              > 0 |           > 0 |    * | subnormal |         * |                                    |
+#### Decimal Floating Point Significand
 
-#### +- 0
+The significand is encoded as a plain integer in the same manner as ieee754 binary integer decimal significands. Since the value is right-justified, it is encoded in big endian order with leading zero bits omitted.
 
-There is no exponent or significand payload. Sign is determined by the sign field.
+#### Significand VLQ Endianness
 
-#### +- Infinity
+Because of how binary and decimal significands are encoded, they have different optimal endianness.
 
-There is no exponent or significand payload. Sign is determined by the sign field.
+**Optimal endianness** means the endianness that allows progressive building of the decoded value without requiring additional state (i.e. each new decoded group can be applied to the accumulator using a shift by 7 followed by a logical OR, regardless of the accumulator's value at the previous step).
 
-#### NaN Values
+For values that "grow" leftward (e.g. 123456):
 
-There is no exponent payload. The significand payload is the same as in the original ieee754 float value.
+    accumulator = (accumulator << 7) | next_7_bits
 
-#### Subnormal Values
+For values that "grow" rightward (e.g. normalized 1.23456):
 
-The significand payload is the same as in the original ieee754 float value. As in ieee754, there is no implied leading `1` bit for subnormals.
+    accumulator = (accumulator >> 7) | (next_7_bits << (sizeof(accumulator)*8 - 7))
 
-The exponent field is set to the minimum exponent value of the original type and size (the value that would encode to 0 after the bias is applied):
+Binary floats are represented using a normalized fractional significand, which "grows" rightward. Decimal floats are represented using a whole number significand, which "grows" leftward. Since they grow in opposite directions, they have different optimal endianness:
 
-| Type    | Size | Subnormal Exponent |
-| ------- | ---- | ------------------ |
-| Binary  |   16 |                -14 |
-| Binary  |   32 |               -126 |
-| Binary  |   64 |              -1022 |
-| Binary  |  128 |             -16382 |
-| Binary  |  256 |            -262142 |
-| Decimal |   32 |                -95 |
-| Decimal |   64 |               -383 |
-| Decimal |  128 |              -6143 |
+| Float Type | Example (4.25) | Normalized | Bit Positioning | Grows     | Optimal Endianness |
+| ---------- | -------------- | ---------- | --------------- | --------- | ------------------ |
+| Binary     | 1.0001 x 2^2   |     Yes    | `abcdefgh----`  | Rightward | Little Endian      |
+| Decimal    | 425 x 10^-2    |     No     | `----abcdefgh`  | Leftward  | Big Endian         |
+
+Fields that grow rightward are best encoded as little endian, and fields that grow leftward are best encoded as big endian.
 
 
 
-Decimal Floating Point Encoding
--------------------------------
+Normal Numbers
+--------------
 
-IEEE754 defines two kinds of decimal floating point encodings (Densely Packed Decimal and Binary Decimal) without a means to automatically differentiate between them. For the purposes of this spec, all decimal floating point significands must be encoded in densely packed decimal format.
+Normal numbers operate on the same principle as in ieee754: A signed exponent, and a signed significand.
+
+As in ieee754, binary floating point values are left-justifed and have an implied leading `1` bit. Decimal floating point values are right-justified and have no implied bits. Binary floating point values must always be normalized, even if they are being encoded from subnormal values. Decimal floating point values are never normalized.
+
+### Zero Value
+
+As a special case, an exponent value of `-0` denotes a zero (±0) significand. In this case, there is no significand VLQ, and the final value's sign is determined by the significand sign field:
+
+    00100000 = [20] = +0
+    01100000 = [60] = -0
+
+
+
+Special Values
+--------------
+
+Special values are signaled by an [extended exponent VLQ](#extended-exponent-vlq). The following special values are possible:
+
+
+### Infinity
+
+Infinity is encoded using an extended exponent VLQ, encoding the exponent value `0`. There is no significand VLQ, and sign is determined by the significand sign field.
+
+    10000000 00000000 = [80 00] = +infinity
+    10000000 01000000 = [80 40] = -infinity
+
+
+### NaN
+
+NaN values are encoded using an extended exponent VLQ, encoding the exponent value `-0`. The significand VLQ is encoded in little endian order, and contains whatever bits were in the ieee754 significand, left justified with trailing zero bits omitted.
+
+    10000000 00100000 10001010 00010100 = [80 20 8a 14]
+    = NaN with a left-justified payload of 000101000101
+
+Any encoded value starting with `[80 20]` is a NaN value.
+
+#### Signaling vs Nonsiganling
+
+Signaling and non-signaling NaN values are encoded according to the appropriate ieee754 spec for the given type. The signaling status is preserved because compact float format encodes the NaN payload as-is.
+
+
+### Subnormal Numbers
+
+Binary floating point values require special encoding for subnormal numbers. Decimal floating point values support unnormalized numbers directly, and don't require special encoding.
+
+When encoding a binary float subnormal number, it must first be normalized, and then stored in the same manner as a normal number, except that it must be encoded using an [extended exponent VLQ](#extended-exponent-vlq). When decoding, the original ieee754 float size of the subnormal can be inferred from the exponent value.
 
 
 
 Examples
 --------
 
-### Value 1.3769248e-20
+### Binary float value 0.2539978
 
-    32-bit ieee754 binary: 0x1e820c00 (0 00111101 00000100000110000000000)
+    32-bit ieee754 binary: 0x3e820c00 (0 01111101 00000100000110000000000)
     Sign bit: 0
-    Exponent: 0x3d (61)
+    Exponent: 0x7d (125)
 
 Convert the exponent to a signed int and subtract the bias:
 
-    exponent = signed(61) - 127 = -66 (0xbe)
+    exponent = signed(125) - 127 = -2
 
-Strip trailing zero bytes from the significand:
+Strip trailing zero bits from the significand:
 
     Original: 00000100000110000000000
-    Stripped: 000001000001100 = 0x4c
+    Stripped: 0000010000011
 
-Build header:
+Build exponent VLQ:
 
-    Sign: 0
-    Special: 0
-    Exponent bytes: 1
-    Significand bytes: 1
-    Result: 00010001 = 0x11
+    Significand sign: 0
+    Exponent sign: 1
+    Exponent magnitude: 2 (min length = 5, so 00010)
+    Result: 0 1 00010
+    As a big endian VLQ: 00100010 = [22]
 
-Result: `[11 be 4c]`
+Build significand VLQ:
+
+    Significand: 0000010000011
+    Split into 7 bit groups (left justified): 0000010 000011 (0)
+    As a little endian VLQ: 10000110 00000010 = [86 02]
+
+Result: `[22 86 02]`
 
 
-### Value -2.03703597633448608627e+90
+### Binary float value -2.03703597633448608627e+90
 
     64 bit ieee754 binary: 0xd2b0000000000000 (1 10100101011 00000000...)
     Sign bit: 1
@@ -164,15 +197,45 @@ Strip trailing zero bytes from the significand:
     Original: 0000 00000000 00000000 00000000 00000000 00000000 00000000
     Stripped: [empty]
 
-Build header:
+Build exponent VLQ:
 
-    Sign: 1
-    Special: 0
-    Exponent bytes: 2
-    Significand bytes: 0
-    Result: 10100000 = 0xb0
+    Significand sign: 1
+    Exponent sign: 0
+    Exponent magnitude: 302
+    Result: 1 0 100101110
+    Split into 7 bit groups (left justified): 1010010 1110 (000)
+    As a big endian VLQ: 11010010 01110000 = [d2 70]
 
-Result: `[b0 2e 01]`
+Build significand VLQ:
+
+    Significand: [empty]
+    As a little endian VLQ: 00000000 [00]
+
+Result: `[d2 70 00]`
+
+
+### Decimal float value 1.43
+
+    32 bit iee754 BID: 0x3180008f (0 01 100011 00000000000000010001111)
+    Sign bit: 0
+    Exponent : 01 100011 (099) - 101 bias = -2
+    Significand: 00000000000000010001111 (143)
+
+Build exponent VLQ:
+
+    Significand sign: 0
+    Exponent sign: 1
+    Exponent magnitude: 2
+    Result: 0 1 00010
+    Split into 7 bit groups (right justified): 0100010
+    As a big endian VLQ: 00100010 = [22]
+
+Build significand VLQ:
+
+    Significand: 10001111
+    As a big endian VLQ: 10000001 00001111 [81 0f]
+
+Result: `[22 81 0f]`
 
 
 
