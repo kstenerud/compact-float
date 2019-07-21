@@ -24,7 +24,7 @@ The general conceptual form of a floating point number is:
 
 Where `base` is `2` for binary floating point numbers and `10` for decimal floating point numbers.
 
-A CFF value is encoded into one or two [VLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
+A CFF value is encoded into one or two [LVLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
 
     [Exponent VLQ]
 
@@ -72,34 +72,20 @@ The significand encoding and endianness depends on whether a binary or a decimal
 
 #### Binary Floating Point Significand
 
-The significand is encoded as a fraction with an implied leading `1` bit in the same manner as binary ieee754 significands. Since the value is left-justified, it is encoded in little endian order with trailing zero bits omitted.
+The significand is encoded as a fraction with an implied leading `1` bit in the same manner as binary ieee754 significands.
 
 #### Decimal Floating Point Significand
 
-The significand is encoded as a plain integer in the same manner as ieee754 binary integer decimal significands. Since the value is right-justified, it is encoded in big endian order with leading zero bits omitted.
+The significand is encoded as a plain integer in the same manner as ieee754 binary integer decimal significands.
 
-#### Significand VLQ Endianness
+#### Significand VLQ Type
 
-Because of how binary and decimal significands are encoded, they have different optimal endianness.
+Binary floats are represented using a normalized fractional significand, which "grows" rightward. Decimal floats are represented using a whole number significand, which "grows" leftward. Since they grow in opposite directions, they are stored as different VLQ types:
 
-**Optimal endianness** means the endianness that allows progressive building of the decoded value without requiring additional state (i.e. each new decoded group can be applied to the accumulator using a shift by 7 followed by a logical OR, regardless of the accumulator's value at the previous step).
-
-For values that "grow" leftward (e.g. 123456):
-
-    accumulator = (accumulator << 7) | next_7_bits
-
-For values that "grow" rightward (e.g. normalized 1.23456):
-
-    accumulator = (accumulator >> 7) | (next_7_bits << (sizeof(accumulator)*8 - 7))
-
-Binary floats are represented using a normalized fractional significand, which "grows" rightward. Decimal floats are represented using a whole number significand, which "grows" leftward. Since they grow in opposite directions, they have different optimal endianness:
-
-| Float Type | Example (4.25) | Normalized | Bit Positioning | Grows     | Optimal Endianness |
-| ---------- | -------------- | ---------- | --------------- | --------- | ------------------ |
-| Binary     | 1.0001 x 2^2   |     Yes    | `abcdefgh----`  | Rightward | Little Endian      |
-| Decimal    | 425 x 10^-2    |     No     | `----abcdefgh`  | Leftward  | Big Endian         |
-
-Fields that grow rightward are best encoded as little endian, and fields that grow leftward are best encoded as big endian.
+| Float Type | Example (4.25) | Normalized | Bit Orientation | VLQ Type |
+| ---------- | -------------- | ---------- | --------------- | -------- |
+| Binary     | 1.0001 x 2^2   |     Yes    | `abcdefgh----`  | LVLQ     |
+| Decimal    | 425 x 10^-2    |     No     | `----abcdefgh`  | RVLQ     |
 
 
 
