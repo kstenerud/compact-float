@@ -24,18 +24,18 @@ The general conceptual form of a floating point number is:
 
 Where `base` is `2` for binary floating point numbers and `10` for decimal floating point numbers.
 
-A CFF value is encoded into one or two [LVLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
+A CFF value is encoded into one or two [VLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
 
-    [Exponent VLQ]
+    [Exponent RVLQ]
 
 or:
 
-    [Exponent VLQ] [Significand VLQ]
+    [Exponent RVLQ] [Significand RVLQ or LVLQ]
 
 
-### Exponent VLQ
+### Exponent RVLQ
 
-The exponent VLQ is a bit field containing the significand sign, exponent sign, and exponent magnitude:
+The exponent is a bit field containing the significand sign, exponent sign, and exponent magnitude:
 
 | Field              | Bits | Notes                      |
 | ------------------ | ---- | -------------------------- |
@@ -47,7 +47,7 @@ The exponent VLQ is a bit field containing the significand sign, exponent sign, 
 
 The normally invalid exponent value `-0` is used to encode a [zero value](#zero-value).
 
-The exponent VLQ is encoded in big endian order.
+The exponent is stored as a [RVLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md).
 
 #### Extended Exponent VLQ
 
@@ -59,7 +59,7 @@ An extended VLQ is a VLQ that is encoded into one more group than is necessary t
 |                 37 | `[25]`    | `[80 25]`    |
 |               1000 | `[87 68]` | `[80 87 68]` |
 
-When an extended exponent VLQ is encountered, it signifies a [special value](#special-values).
+When an extended exponent RVLQ is encountered, it signifies a [special value](#special-values).
 
 
 ### Significand VLQ
@@ -68,19 +68,15 @@ When an extended exponent VLQ is encountered, it signifies a [special value](#sp
 | --------------------- | ---- |
 | Significand Magnitude |   7+ |
 
-The significand encoding and endianness depends on whether a binary or a decimal floating point value is being encoded:
-
-#### Binary Floating Point Significand
-
-The significand is encoded as a fraction with an implied leading `1` bit in the same manner as binary ieee754 significands.
-
-#### Decimal Floating Point Significand
-
-The significand is encoded as a plain integer in the same manner as ieee754 binary integer decimal significands.
-
 #### Significand VLQ Type
 
-Binary floats are represented using a normalized fractional significand, which "grows" rightward. Decimal floats are represented using a whole number significand, which "grows" leftward. Since they grow in opposite directions, they are stored as different VLQ types:
+The significand VLQ type depends on whether a binary or a decimal floating point value is being encoded.
+
+Binary floating point significands are stored as a fraction with an implied leading `1` bit in the same manner as binary ieee754 significands. The value "grows" rightward as more significand digits are needed.
+
+Decima floating point significands are stored as a plain integer in the same manner as ieee754 binary integer decimal significands. The value "grows" leftward as more significant digits are needed.
+
+Since they grow in opposite directions, they are stored as different VLQ types:
 
 | Float Type | Example (4.25) | Normalized | Bit Orientation | VLQ Type |
 | ---------- | -------------- | ---------- | --------------- | -------- |
