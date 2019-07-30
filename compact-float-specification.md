@@ -39,9 +39,9 @@ The exponent is a bit field containing the significand sign, exponent sign, and 
 
 | Field              | Bits | Notes                      |
 | ------------------ | ---- | -------------------------- |
-| Significand Sign   |    1 | 0 = positive, 1 = negative |
-| Exponent Sign      |    1 | 0 = positive, 1 = negative |
 | Exponent Magnitude |   5+ | Stored as unsigned integer |
+| Exponent Sign      |    1 | 0 = positive, 1 = negative |
+| Significand Sign   |    1 | 0 = positive, 1 = negative |
 
 `exponent magnitude` is an unsigned integer value (no bias). The `exponent sign` determines the sign of the exponent.
 
@@ -158,68 +158,68 @@ When encoding a binary float subnormal number, it must first be normalized, and 
 Examples
 --------
 
-### Binary float value 0.2539978
+### Binary float value 0.50830078125
 
-    32-bit ieee754 binary: 0x3e820c00 (0 01111101 00000100000110000000000)
+    32-bit ieee754 binary: 0x3f022000 (0 01111110 00000100010000000000000)
     Sign bit: 0
-    Exponent: 0x7d (125)
+    Exponent: 0x7e (126)
 
 Convert the exponent to a signed int and subtract the bias:
 
-    exponent = signed(125) - 127 = -2
+    exponent = signed(126) - 127 = -1
+
+Build exponent RVLQ:
+
+    Exponent magnitude: 1 (min length = 5, so 00001)
+    Exponent sign: 1
+    Significand sign: 0
+    Result: 00001 1 0
+    As a RVLQ: 0000110 = [06]
 
 Strip trailing zero bits from the significand:
 
-    Original: 00000100000110000000000
-    Stripped: 0000010000011
+    Original: 00000100010000000000000
+    Stripped: 0000010001
 
-Build exponent VLQ:
+Build significand LVLQ:
 
-    Significand sign: 0
-    Exponent sign: 1
-    Exponent magnitude: 2 (min length = 5, so 00010)
-    Result: 0 1 00010
-    As a big endian VLQ: 00100010 = [22]
+    Significand: 0000010001
+    Split into 7 bit groups (left justified): 0000010 001(0000)
+    As a LVLQ (little endian): 10010000 00000010 = [90 02]
 
-Build significand VLQ:
-
-    Significand: 0000010000011
-    Split into 7 bit groups (left justified): 0000010 000011 (0)
-    As a little endian VLQ: 10000110 00000010 = [86 02]
-
-Result: `[22 86 02]`
+Result: `[06 90 02]`
 
 
 ### Binary float value -2.03703597633448608627e+90
 
     64 bit ieee754 binary: 0xd2b0000000000000 (1 10100101011 00000000...)
     Sign bit: 1
-    Exponent: 0x52d (1325)
+    Exponent: 0x52b (1323)
 
 Convert the exponent to a signed int and subtract the bias:
 
-    exponent = signed(1325) - 1023 = 302 (0x12e)
+    exponent = signed(1323) - 1023 = 300 (0x12c)
+
+Build exponent RVLQ:
+
+    Exponent magnitude: 300 (100101100)
+    Exponent sign: 0
+    Significand sign: 1
+    Result: 100101100 0 1
+    Split into 7 bit groups (left justified): 1001 0110001
+    As a RVLQ: 10001001 00110001 = [81 31]
 
 Strip trailing zero bytes from the significand:
 
     Original: 0000 00000000 00000000 00000000 00000000 00000000 00000000
     Stripped: [empty]
 
-Build exponent VLQ:
-
-    Significand sign: 1
-    Exponent sign: 0
-    Exponent magnitude: 302
-    Result: 1 0 100101110
-    Split into 7 bit groups (left justified): 1010010 1110 (000)
-    As a big endian VLQ: 11010010 01110000 = [d2 70]
-
-Build significand VLQ:
+Build significand LVLQ:
 
     Significand: [empty]
     As a little endian VLQ: 00000000 [00]
 
-Result: `[d2 70 00]`
+Result: `[88 4b 00]`
 
 
 ### Decimal float value 1.43
@@ -229,21 +229,22 @@ Result: `[d2 70 00]`
     Exponent : 01 100011 (099) - 101 bias = -2
     Significand: 00000000000000010001111 (143)
 
-Build exponent VLQ:
+Build exponent RVLQ:
 
     Significand sign: 0
     Exponent sign: 1
     Exponent magnitude: 2
-    Result: 0 1 00010
-    Split into 7 bit groups (right justified): 0100010
-    As a big endian VLQ: 00100010 = [22]
+    Result: 00010 1 0
+    Split into 7 bit groups (right justified): 0001010
+    As a RVLQ: 00001010 = [0a]
 
-Build significand VLQ:
+Build significand RVLQ:
 
     Significand: 10001111
-    As a big endian VLQ: 10000001 00001111 [81 0f]
+    Split into 7 bit groups (right justified): 1 0001111
+    As a RVLQ: 10000001 00001111 [81 0f]
 
-Result: `[22 81 0f]`
+Result: `[0a 81 0f]`
 
 
 
