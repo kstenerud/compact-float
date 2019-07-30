@@ -35,13 +35,38 @@ int cfloat_encoded_size(double value)
     return 0;
 }
 
+static inline void copy_64_bits(const uint8_t* restrict src, uint8_t* restrict dst)
+{
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+    dst[3] = src[3];
+    dst[4] = src[4];
+    dst[5] = src[5];
+    dst[6] = src[6];
+    dst[7] = src[7];
+}
+
+static inline uint64_t float_to_bits_64(double value)
+{
+    uint64_t result = 0;
+    copy_64_bits((uint8_t*)&value, (uint8_t*)&result);
+    return result;
+}
+
+static inline double bits_to_float_64(uint64_t bits)
+{
+    double result = 0;
+    copy_64_bits((uint8_t*)&bits, (uint8_t*)&result);
+    return result;
+}
+
 int cfloat_encode(double fvalue, uint8_t* dst, int dst_length)
 {
-    uint64_t uvalue = 0;
-    memcpy((uint8_t*)&uvalue, (uint8_t*)&fvalue, sizeof(uvalue));
-    uint64_t significand = uvalue & FLOAT64_MASK_SIGNIFICAND;
-    int64_t exponent = (uvalue >> FLOAT64_SHIFT_EXPONENT) & FLOAT64_MASK_EXPONENT;
-    uint64_t sign = uvalue >> FLOAT64_SHIFT_SIGN;
+    uint64_t bits = float_to_bits_64(fvalue);
+    uint64_t significand = bits & FLOAT64_MASK_SIGNIFICAND;
+    int64_t exponent = (bits >> FLOAT64_SHIFT_EXPONENT) & FLOAT64_MASK_EXPONENT;
+    uint64_t sign = bits >> FLOAT64_SHIFT_SIGN;
 
     if(exponent == FLOAT64_EXPONENT_NAN)
     {
@@ -97,8 +122,8 @@ int cfloat_decode(const uint8_t* src, int src_length, double* value)
     }
     exponent += FLOAT64_BIAS;
 
-    uint64_t uvalue = significand | (exponent << FLOAT64_SHIFT_EXPONENT) | (sign << FLOAT64_SHIFT_SIGN);
-    memcpy((uint8_t*)value, (uint8_t*)&uvalue, sizeof(*value));
+    uint64_t bits = significand | (exponent << FLOAT64_SHIFT_EXPONENT) | (sign << FLOAT64_SHIFT_SIGN);
+    copy_64_bits((uint8_t*)&bits, (uint8_t*)value);
 
     return exponent_length + significand_length;
 }
