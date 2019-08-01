@@ -12,10 +12,12 @@ project_headers = [
 
 project_source_files = [
   'src/library.c',
+  'src/binary_float.c',
 ]
 
 project_test_files = [
   'tests/src/library.cpp',
+  'tests/src/binary_float.cpp',
   'tests/src/readme_examples_test.cpp'
 ]
 

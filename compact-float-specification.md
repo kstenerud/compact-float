@@ -96,8 +96,8 @@ As in ieee754, binary floating point values are left-justified and have an impli
 
 As a special case, an exponent value of `-0` denotes a zero (±0) significand. In this case, there is no significand VLQ, and the final value's sign is determined by the significand sign field:
 
-    00100000 = [20] = +0
-    01100000 = [60] = -0
+    00100000 = [02] = +0
+    01100000 = [03] = -0
 
 
 
@@ -112,7 +112,7 @@ Special values are signaled by an [extended exponent VLQ](#extended-exponent-vlq
 Infinity is encoded using an extended exponent VLQ, encoding the exponent value `0`. There is no significand VLQ, and sign is determined by the significand sign field.
 
     10000000 00000000 = [80 00] = +infinity
-    10000000 01000000 = [80 40] = -infinity
+    10000000 01000000 = [80 01] = -infinity
 
 
 ### NaN

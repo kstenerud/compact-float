@@ -67,23 +67,50 @@ CFLOAT_PUBLIC const char* cfloat_version();
  * Calculate the number of bytes that would be occupied by this float when
  * encoded.
  */
-CFLOAT_PUBLIC int cfloat_encoded_size(double value);
+CFLOAT_PUBLIC int cfloat_binary_encoded_size(double value);
 
 /**
- * Encode a float to a destination buffer.
+ * Encode a binary float to a destination buffer.
  *
- * Returns the number of bytes written to encode the date, or -1 if there wasn't
+ * Returns the number of bytes written to encode the value, or 0 if there wasn't
  * enough room.
  */
-CFLOAT_PUBLIC int cfloat_encode(double value, uint8_t* dst, int dst_length);
+CFLOAT_PUBLIC int cfloat_binary_encode(double value, uint8_t* dst, int dst_length);
 
 /**
- * Decode a float from a source buffer.
+ * Decode a binary float from a source buffer.
  *
- * Returns the number of bytes read to decode the date, or -1 if there wasn't
+ * Returns the number of bytes read to decode the value, or 0 if there wasn't
  * enough data.
  */
-CFLOAT_PUBLIC int cfloat_decode(const uint8_t* src, int src_length, double* value);
+CFLOAT_PUBLIC int cfloat_binary_decode(const uint8_t* src, int src_length, double* value);
+
+
+#ifdef __STDC_DEC_FP__
+
+/**
+ * Calculate the number of bytes that would be occupied by this float when
+ * encoded.
+ */
+CFLOAT_PUBLIC int cfloat_decimal_encoded_size(double value);
+
+/**
+ * Encode a decimal float to a destination buffer.
+ *
+ * Returns the number of bytes written to encode the date, or 0 if there wasn't
+ * enough room.
+ */
+CFLOAT_PUBLIC int cfloat_decimal_encode(_Decimal64 value, uint8_t* dst, int dst_length);
+
+/**
+ * Decode a decimal float from a source buffer.
+ *
+ * Returns the number of bytes read to decode the date, or 0 if there wasn't
+ * enough data.
+ */
+CFLOAT_PUBLIC int cfloat_decimal_decode(const uint8_t* src, int src_length, _Decimal64* value);
+
+#endif
 
 
 #ifdef __cplusplus 
