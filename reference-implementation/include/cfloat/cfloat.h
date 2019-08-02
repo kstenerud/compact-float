@@ -45,6 +45,25 @@
     #endif
 #endif
 
+/*
+// TODO: Decimal float support
+#ifdef __GNUC__
+    #ifdef __cplusplus
+        #include <decimal/decimal>
+        // Hack: According to [ISO/IEC TR 24733], the compiler should supply this typedef
+        typedef std::decimal::decimal64 _Decimal64;
+        // #define _Decimal64 std::decimal::decimal64::__decfloat64
+        #define SUPPORTS_DECFLOAT 1
+    #else
+        #define __STDC_WANT_DEC_FP__
+        #include <float.h>
+        #ifdef DEC_EVAL_METHOD
+            #define SUPPORTS_DECFLOAT 1
+        #endif
+    #endif
+#endif
+*/
+
 #ifdef __cplusplus 
 extern "C" {
 #endif
@@ -86,13 +105,15 @@ CFLOAT_PUBLIC int cfloat_binary_encode(double value, uint8_t* dst, int dst_lengt
 CFLOAT_PUBLIC int cfloat_binary_decode(const uint8_t* src, int src_length, double* value);
 
 
-#ifdef __STDC_DEC_FP__
+#if 0
+TODO: Decimal float support
+#ifdef SUPPORTS_DECFLOAT
 
 /**
  * Calculate the number of bytes that would be occupied by this float when
  * encoded.
  */
-CFLOAT_PUBLIC int cfloat_decimal_encoded_size(double value);
+ANSI_EXTENSION CFLOAT_PUBLIC int cfloat_decimal_encoded_size(_Decimal64 value);
 
 /**
  * Encode a decimal float to a destination buffer.
@@ -100,7 +121,7 @@ CFLOAT_PUBLIC int cfloat_decimal_encoded_size(double value);
  * Returns the number of bytes written to encode the date, or 0 if there wasn't
  * enough room.
  */
-CFLOAT_PUBLIC int cfloat_decimal_encode(_Decimal64 value, uint8_t* dst, int dst_length);
+ANSI_EXTENSION CFLOAT_PUBLIC int cfloat_decimal_encode(_Decimal64 value, uint8_t* dst, int dst_length);
 
 /**
  * Decode a decimal float from a source buffer.
@@ -108,8 +129,9 @@ CFLOAT_PUBLIC int cfloat_decimal_encode(_Decimal64 value, uint8_t* dst, int dst_
  * Returns the number of bytes read to decode the date, or 0 if there wasn't
  * enough data.
  */
-CFLOAT_PUBLIC int cfloat_decimal_decode(const uint8_t* src, int src_length, _Decimal64* value);
+ANSI_EXTENSION CFLOAT_PUBLIC int cfloat_decimal_decode(const uint8_t* src, int src_length, _Decimal64* value);
 
+#endif // SUPPORTS_DECFLOAT
 #endif
 
 
