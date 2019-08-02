@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <stdio.h>
 #include <vector>
-#include <cfloat/cfloat.h>
+#include <compact_float/compact_float.h>
 
 static void demonstrate_encode()
 {

@@ -1,6 +1,4 @@
-#include <math.h>
-
-#include "cfloat/cfloat.h"
+#include "compact_float/compact_float.h"
 
 // #define KSLogger_LocalLevel TRACE
 #include "kslogger.h"
@@ -16,10 +14,3 @@ const char* cfloat_version()
 {
     return EXPAND_AND_QUOTE(PROJECT_VERSION);
 }
-
-int cfloat_encode_binaryd_size(double value)
-{
-    (void)value;
-    return 0;
-}
-

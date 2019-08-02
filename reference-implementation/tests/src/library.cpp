@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <cfloat/cfloat.h>
+#include <compact_float/compact_float.h>
 
 // #define KSLogger_LocalLevel DEBUG
 #include "kslogger.h"

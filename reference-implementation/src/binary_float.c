@@ -1,6 +1,6 @@
 #include <math.h>
 
-#include "cfloat/cfloat.h"
+#include "compact_float/compact_float.h"
 #include "vlq/vlq.h"
 
 #define KSLogger_LocalLevel TRACE

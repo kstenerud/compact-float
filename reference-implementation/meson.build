@@ -1,5 +1,5 @@
 project(
-  'cfloat',
+  'compact_float',
   'c',
   version : '1.0.0',
   default_options : ['warning_level=3']
@@ -7,7 +7,7 @@ project(
 project_description = 'Concise Binary Encoding'
 
 project_headers = [
-  'include/cfloat/cfloat.h',
+  'include/compact_float/compact_float.h',
 ]
 
 project_source_files = [
@@ -47,9 +47,9 @@ build_args += [
 
 # Only make public interfaces visible
 if target_machine.system() == 'windows' or target_machine.system() == 'cygwin'
-  build_args += '-DCFLOAT_PUBLIC="__declspec(dllexport)"'
+  build_args += '-DCOMPACT_FLOAT_PUBLIC="__declspec(dllexport)"'
 else
-  build_args += '-DCFLOAT_PUBLIC=__attribute__((visibility("default")))'
+  build_args += '-DCOMPACT_FLOAT_PUBLIC=__attribute__((visibility("default")))'
 endif
 
 project_target = shared_library(
