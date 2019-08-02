@@ -3,7 +3,7 @@
 #include "compact_float/compact_float.h"
 #include "vlq/vlq.h"
 
-#define KSLogger_LocalLevel TRACE
+// #define KSLogger_LocalLevel TRACE
 #include "kslogger.h"
 
 #define CFLOAT_EXPONENT_HIGH_BITS_COUNT 5
