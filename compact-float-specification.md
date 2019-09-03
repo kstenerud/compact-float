@@ -1,17 +1,12 @@
 Compact Float Format
 ====================
 
-Compact float format (CFF) is an encoding scheme to store a floating point value in as few bytes as possible for data transmission. CFF supports all values that can be stored in any sized ieee754 decimal and binary floating point encoding.
+Compact float format (CFF) is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission.
 
-CFF can store all of the kinds of values that ieee754 can, without data loss:
-* Binary and decimal floating point values
-* Normal values
-* Subnormal values
+CFF can store all of the kinds of values that the ieee754 decimal types can, without data loss:
 * ±0
 * ±infinity
 * Signaling and quiet NaNs, including payload
-
-Note: CFF does not store meta data about what kind of floating point value is contained within (decimal or binary).
 
 
 
@@ -20,143 +15,103 @@ Encoded Structure
 
 The general conceptual form of a floating point number is:
 
-    value = sign * significand * base ^ exponent
+    value = sign * significand * 10 ^ (exponent * exponent_sign)
 
-Where `base` is `2` for binary floating point numbers and `10` for decimal floating point numbers.
+A compact float value is encoded into one or two [RVLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
 
-A CFF value is encoded into one or two [VLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
+Normal Values:
+
+    [Exponent RVLQ] [Significand RVLQ]
+
+[Special Values](#special-values):
 
     [Exponent RVLQ]
 
-or:
-
-    [Exponent RVLQ] [Significand RVLQ or LVLQ]
 
 
 ### Exponent RVLQ
 
-The exponent is a bit field containing the significand sign, exponent sign, and exponent magnitude:
+The exponent RVLQ is a bit field containing the significand sign, exponent sign, and exponent magnitude:
 
 | Field              | Bits | Notes                      |
 | ------------------ | ---- | -------------------------- |
-| Exponent Magnitude |   5+ | Stored as unsigned integer |
+| Exponent Magnitude |   5+ | exponent high bits         |
 | Exponent Sign      |    1 | 0 = positive, 1 = negative |
 | Significand Sign   |    1 | 0 = positive, 1 = negative |
 
-`exponent magnitude` is an unsigned integer value (no bias). The `exponent sign` determines the sign of the exponent.
-
-The normally invalid exponent value `-0` is used to encode a [zero value](#zero-value).
-
-The exponent is stored as a [RVLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md).
-
-#### Extended Exponent VLQ
-
-An extended VLQ is a VLQ that is encoded into one more group than is necessary to hold the value. So for example (assuming both sign bits are 0):
-
-| Exponent Magnitude | Normal    | Extended     |
-| ------------------ | --------- | ------------ |
-|                  0 | `[00]`    | `[80 00]`    |
-|                 37 | `[25]`    | `[80 25]`    |
-|               1000 | `[87 68]` | `[80 87 68]` |
-
-When an extended exponent RVLQ is encountered, it signifies a [special value](#special-values).
+`exponent magnitude` is an absolute integer value representing (10 ^ exponent). The `exponent sign` determines whether the exponent is multiplied by `1` or `-1`.
 
 
-### Significand VLQ
+### Significand RVLQ
 
 | Field                 | Bits |
 | --------------------- | ---- |
 | Significand Magnitude |   7+ |
 
-#### Significand VLQ Type
-
-The significand VLQ type depends on whether a binary or a decimal floating point value is being encoded.
-
-Binary floating point significands are stored as a fraction with an implied leading `1` bit in the same manner as binary ieee754 significands. The value "grows" rightward as more significand digits are needed.
-
-Decima floating point significands are stored as a plain integer in the same manner as ieee754 binary integer decimal significands. The value "grows" leftward as more significant digits are needed.
-
-Since they grow in opposite directions, they are stored as different VLQ types:
-
-| Float Type | Example (4.25) | Normalized | Bit Orientation | VLQ Type |
-| ---------- | -------------- | ---------- | --------------- | -------- |
-| Binary     | 1.0001 x 2^2   |     Yes    | `abcdefgh----`  | LVLQ     |
-| Decimal    | 425 x 10^-2    |     No     | `----abcdefgh`  | RVLQ     |
-
-
-
-Normal Numbers
---------------
-
-Normal numbers operate on the same principle as in ieee754: A signed exponent, and a signed significand.
-
-As in ieee754, binary floating point values are left-justified and have an implied leading `1` bit. Decimal floating point values are right-justified and have no implied bits. Binary floating point values must always be normalized, even if they are being encoded from subnormal values. Decimal floating point values are never normalized.
-
-### Zero Value
-
-As a special case, an exponent value of `-0` denotes a zero (±0) significand. In this case, there is no significand VLQ, and the final value's sign is determined by the significand sign field:
-
-    00100000 = [02] = +0
-    01100000 = [03] = -0
+The `significand magnitude` is an absolute integer value that will be multiplied by the `exponent`. The `significand sign` determines whether the significand is multiplied by `1` or `-1`.
 
 
 
 Special Values
 --------------
 
-Special values are signaled by an [extended exponent VLQ](#extended-exponent-vlq). The following special values are possible:
+Special values are encoded entirely into the exponent RVLQ, and have no significand RVLQ structure.
+
+
+#### Extended Exponent
+
+Some special values are signaled by an extended exponent RVLQ, which is an RVLQ that is encoded into one more group than is necessary to hold the exponent value.
+
+Examples:
+
+| Normal RVLQ | Extended RVLQ |
+| ----------- | ------------- |
+| `[00]`      | `[80 00]`     |
+| `[7c]`      | `[80 7c]`     |
+| `[9f 40]`   | `[80 9f 40]`  |
+
+
+### Zero
+
+Zero values (±0) are encoded using an exponent value of `-0`, which is an otherwise impossible value. The sign is determined by the significand sign field:
+
+    00000010 = [02] = +0
+    00000011 = [03] = -0
 
 
 ### Infinity
 
-Infinity is encoded using an extended exponent VLQ, encoding the exponent value `0`. There is no significand VLQ, and sign is determined by the significand sign field.
+Infinity is encoded using an [extended exponent RVLQ](#extended-exponent), encoding the exponent value `-0`. The sign is determined by the significand sign field.
 
-    10000000 00000000 = [80 00] = +infinity
-    10000000 01000000 = [80 01] = -infinity
+    10000000 00000010 = [80 02] = +infinity
+    10000000 00000011 = [80 03] = -infinity
 
 
 ### NaN
 
-NaN values are encoded using an extended exponent VLQ, encoding the exponent value `-0`. The significand VLQ encodes a `signaling bit` and a `NaN payload`, in big endian order.
+NaN values are encoded using a modified [extended exponent RVLQ](#extended-exponent) with the `exponent sign` fixed at `0`. The modified "exponent" field is encoded as follows:
 
-| Field         | Size | Notes           |
-| ------------- | ---- | --------------- |
-| Signaling Bit |    1 | `1` = signaling |
-| NaN Payload   |   6+ | Right justified |
+| Field            | Size | Notes                                                     |
+| ---------------- | ---- | --------------------------------------------------------- |
+| NaN Payload      |   4+ | Right justified, leading zeroes and signaling bit omitted |
+| Signaling Bit    |    1 | 0 = quiet, 1 = signaling                                  |
+| 0                |    1 | Always 0                                                  |
+| Significand Sign |    1 | 0 = positive, 1 = negative                                |
 
-#### Signaling Bit
-
-The ieee754 spec does not actually require a specific encoding of the first bit of the NaN payload to differentiate signaling from non-signaling binary float NaN values (it says **should** rather than **must**), and the recommended values are the opposite of the signaling bit for decimal floats. CFF harmonizes this for all NaN values:
-
-| Value | Meaning       |
-| ----- | ------------- |
-|   0   | Quiet NaN     |
-|   1   | Signaling NaN |
-
-An implementation must properly convert to/from the underlying encoding of the platform it's running on.
-
-#### NaN Payload
-
-The `NaN payload` field contains the bit pattern after the signaling bit from the original ieee754 value, right-justified, with leading zero bits omitted.
-
-#### Example
-
-    10000000 00100000 10001010 00010100 = [80 20 c9 22]
-    = signaling NaN with a (right-justified) payload of 10010100010
-
-Any encoded value starting with `[80 20]` is a NaN value.
-
-
-### Subnormal Numbers
-
-Binary floating point values require special encoding for subnormal numbers. Decimal floating point values support unnormalized numbers directly, and don't require special encoding.
-
-When encoding a binary float subnormal number, it must first be normalized, and then stored in the same manner as a normal number, except that it must be encoded using an [extended exponent VLQ](#extended-exponent-vlq). When decoding, the original ieee754 float size of the subnormal can be inferred from the exponent value.
+The `NaN payload` field contains the bit pattern of the original ieee754 NaN value, signaling bit omitted, right-justified, with leading zero bits omitted. An implementation must properly convert the `signaling bit` to/from the underlying encoding of the platform it's running on.
 
 
 
 Examples
 --------
+
+TODO: Rebuild these. They're in the old format!
+
+#### Example NaN
+
+    10000000 00100000 10001010 00010100 = [80 20 c9 22]
+    = signaling NaN with a (right-justified) payload of 10010100010
+
 
 ### Binary float value 0.50830078125
 
