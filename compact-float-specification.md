@@ -1,9 +1,9 @@
 Compact Float Format
 ====================
 
-Compact float format (CFF) is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission.
+Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission.
 
-CFF can store all of the kinds of values that the ieee754 decimal types can, without data loss:
+Compact float can store all of the kinds of values that the ieee754 decimal types can, without data loss:
 * ±0
 * ±infinity
 * Signaling and quiet NaNs, including payload
@@ -19,11 +19,11 @@ The general conceptual form of a floating point number is:
 
 A compact float value is encoded into one or two [RVLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
 
-Normal Values:
+#### Normal Value Encoding:
 
     [Exponent RVLQ] [Significand RVLQ]
 
-[Special Values](#special-values):
+#### [Special Value](#special-values) Encoding:
 
     [Exponent RVLQ]
 
@@ -58,7 +58,7 @@ Special Values
 Special values are encoded entirely into the exponent RVLQ, and have no significand RVLQ structure.
 
 
-#### Extended Exponent
+#### Extended Exponent RVLQ
 
 Some special values are signaled by an extended exponent RVLQ, which is an RVLQ that is encoded into one more group than is necessary to hold the exponent value.
 
@@ -81,7 +81,7 @@ Zero values (±0) are encoded using an exponent value of `-0`, which is an other
 
 ### Infinity
 
-Infinity is encoded using an [extended exponent RVLQ](#extended-exponent), encoding the exponent value `-0`. The sign is determined by the significand sign field.
+Infinity is encoded using an [extended exponent RVLQ](#extended-exponent-rvlq), encoding the exponent value `-0`. The sign is determined by the significand sign field.
 
     10000000 00000010 = [80 02] = +infinity
     10000000 00000011 = [80 03] = -infinity
@@ -89,7 +89,7 @@ Infinity is encoded using an [extended exponent RVLQ](#extended-exponent), encod
 
 ### NaN
 
-NaN values are encoded using a modified [extended exponent RVLQ](#extended-exponent) with the `exponent sign` fixed at `0`. The modified "exponent" field is encoded as follows:
+NaN (not-a-number) values are encoded using a modified [extended exponent RVLQ](#extended-exponent-rvlq) with the `exponent sign` fixed at `0`. The modified "exponent" field is encoded as follows:
 
 | Field            | Size | Notes                                                     |
 | ---------------- | ---- | --------------------------------------------------------- |
@@ -105,101 +105,63 @@ The `NaN payload` field contains the bit pattern of the original ieee754 NaN val
 Examples
 --------
 
-TODO: Rebuild these. They're in the old format!
+### Float value 0.5083
 
-#### Example NaN
+ * Significand: 5083
+ * Exponent: -4
 
-    10000000 00100000 10001010 00010100 = [80 20 c9 22]
-    = signaling NaN with a (right-justified) payload of 10010100010
+Exponent field contents:
 
+    Exponent magnitude: 100
+    Exponent sign:          1
+    Significand sign:         0
+    Total:              100 1 0
 
-### Binary float value 0.50830078125
+Build the exponent RVLQ:
 
-    32-bit ieee754 binary: 0x3f022000 (0 01111110 00000100010000000000000)
-    Sign bit: 0
-    Exponent: 0x7e (126)
+    Value: 00010010
+    Hex:   0x12
 
-Convert the exponent to a signed int and subtract the bias:
+Significand field contents:
 
-    exponent = signed(126) - 127 = -1
+    Value:       5083 (13db)
+    Binary:      0001 0011 1101 1011
+    Groups of 7: 00 0100111 1011011
+    As RVLQ:     10100111 01011011
+    Hex:         0xa7     0x5b
 
-Build exponent RVLQ:
-
-    Exponent magnitude: 1 (min length = 5, so 00001)
-    Exponent sign: 1
-    Significand sign: 0
-    Result: 00001 1 0
-    As a RVLQ: 0000110 = [06]
-
-Strip trailing zero bits from the significand:
-
-    Original: 00000100010000000000000
-    Stripped: 0000010001
-
-Build significand LVLQ:
-
-    Significand: 0000010001
-    Split into 7 bit groups (left justified): 0000010 001(0000)
-    As a LVLQ (little endian): 10010000 00000010 = [90 02]
-
-Result: `[06 90 02]`
+Result: `[12 a7 5b]`
 
 
-### Binary float value -2.03703597633448608627e+90
+### NaN
 
-    64 bit ieee754 binary: 0xd2b0000000000000 (1 10100101011 00000000...)
-    Sign bit: 1
-    Exponent: 0x52b (1323)
+Given a 32-bit ieee754 decimal float with raw value: `0xfe008410`
 
-Convert the exponent to a signed int and subtract the bias:
+* Bits: `1111 1110 0000 0000 1000 0100 0001 0000`
+* Bit 31 `1` indicates a negative sign bit.
+* Bits 26-30 `11111` mark a NaN value.
+* Bit 25 `1` indicates that this is a signaling NaN.
+* Bits 0-24 are the NaN payload. With leading zero bits omitted: `0x8410`
 
-    exponent = signed(1323) - 1023 = 300 (0x12c)
+Exponent field contents:
 
-Build exponent RVLQ:
+    Payload:   0x8410
+    Bits:      1000 0100 0001 0000
+    Signaling:                     1
+    0:                               0
+    Sign:                              1
+    Total:     1000 0100 0001 0000 1 0 1
 
-    Exponent magnitude: 300 (100101100)
-    Exponent sign: 0
-    Significand sign: 1
-    Result: 100101100 0 1
-    Split into 7 bit groups (left justified): 1001 0110001
-    As a RVLQ: 10001001 00110001 = [81 31]
+Build the exponent RVLQ:
 
-Strip trailing zero bytes from the significand:
+    Value:       1000010000010000101
+    Groups of 7: 10000 1000001 0000101
+    As RVLQ:     10010000 11000001 00000101
+    Hex:         0x90     0xc1     0x05
 
-    Original: 0000 00000000 00000000 00000000 00000000 00000000 00000000
-    Stripped: [empty]
-
-Build significand LVLQ:
-
-    Significand: [empty]
-    As a little endian VLQ: 00000000 [00]
-
-Result: `[88 4b 00]`
+Result: `[90 c1 05]`
 
 
-### Decimal float value 1.43
-
-    32 bit ieee754 BID: 0x3180008f (0 01 100011 00000000000000010001111)
-    Sign bit: 0
-    Exponent : 01 100011 (099) - 101 bias = -2
-    Significand: 00000000000000010001111 (143)
-
-Build exponent RVLQ:
-
-    Significand sign: 0
-    Exponent sign: 1
-    Exponent magnitude: 2
-    Result: 00010 1 0
-    Split into 7 bit groups (right justified): 0001010
-    As a RVLQ: 00001010 = [0a]
-
-Build significand RVLQ:
-
-    Significand: 10001111
-    Split into 7 bit groups (right justified): 1 0001111
-    As a RVLQ: 10000001 00001111 [81 0f]
-
-Result: `[0a 81 0f]`
 
 
 
