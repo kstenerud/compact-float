@@ -41,6 +41,18 @@ The exponent RVLQ is a bit field containing the significand sign, exponent sign,
 
 `exponent magnitude` is an absolute integer value representing (10 ^ exponent). The `exponent sign` determines whether the exponent is multiplied by `1` or `-1`.
 
+#### Extended Exponent RVLQ
+
+Some special values are signaled by an extended exponent RVLQ, which is an RVLQ that is encoded into one more group than is necessary to hold the exponent value.
+
+Examples:
+
+| Normal RVLQ | Extended RVLQ |
+| ----------- | ------------- |
+| `[00]`      | `[80 00]`     |
+| `[7c]`      | `[80 7c]`     |
+| `[9f 40]`   | `[80 9f 40]`  |
+
 
 ### Significand RVLQ
 
@@ -56,19 +68,6 @@ Special Values
 --------------
 
 Special values are encoded entirely into the exponent RVLQ, and have no significand RVLQ structure.
-
-
-#### Extended Exponent RVLQ
-
-Some special values are signaled by an extended exponent RVLQ, which is an RVLQ that is encoded into one more group than is necessary to hold the exponent value.
-
-Examples:
-
-| Normal RVLQ | Extended RVLQ |
-| ----------- | ------------- |
-| `[00]`      | `[80 00]`     |
-| `[7c]`      | `[80 7c]`     |
-| `[9f 40]`   | `[80 9f 40]`  |
 
 
 ### Zero
