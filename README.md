@@ -1,12 +1,9 @@
 Compact Float Format
 ====================
 
-Compact float format (CFF) is an encoding scheme to store a floating point value in as few bytes as possible for data transmission. CFF supports all values that can be stored in any sized ieee754 decimal and binary floating point encoding.
+Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission.
 
-CFF can store all of the kinds of values that ieee754 can, without data loss:
-* Binary and decimal floating point values
-* Normal values
-* Subnormal values
+Compact float can store all of the kinds of values that the IEEE754 decimal types can, without data loss:
 * ±0
 * ±infinity
 * Signaling and quiet NaNs, including payload
