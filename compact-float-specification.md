@@ -6,7 +6,7 @@ Compact float format is an encoding scheme to store a decimal floating point val
 Compact float can store all of the kinds of values that the IEEE754 decimal types can, without data loss:
 * ±0
 * ±infinity
-* Signaling and quiet NaNs, including payload
+* Signaling and quiet NaNs
 
 
 
@@ -90,7 +90,7 @@ Special values are encoded entirely into the exponent RVLQ, and have no signific
 
 ### Zero
 
-Zero values (±0) are encoded using an exponent value of `-0`, which is an otherwise impossible value. The sign is determined by the significand sign field:
+Zero values (±0) are encoded using an exponent value of `-0`, which is an otherwise impossible value. The significand sign field determines whether it's positive or negative 0.
 
     00000010 = [02] = +0
     00000011 = [03] = -0
@@ -98,7 +98,7 @@ Zero values (±0) are encoded using an exponent value of `-0`, which is an other
 
 ### Infinity
 
-Infinity is encoded using an [extended exponent RVLQ](#extended-exponent-rvlq), encoding the exponent value `-0`. The sign is determined by the significand sign field.
+Infinity is encoded using an [extended exponent RVLQ](#extended-exponent-rvlq), encoding the exponent value `-0`. The significand sign field determines whether it's positive or negative infinity.
 
     10000000 00000010 = [80 02] = +infinity
     10000000 00000011 = [80 03] = -infinity
@@ -106,25 +106,17 @@ Infinity is encoded using an [extended exponent RVLQ](#extended-exponent-rvlq), 
 
 ### NaN
 
-NaN (not-a-number) values are encoded using a modified [extended exponent RVLQ](#extended-exponent-rvlq) with the `exponent sign` fixed at `0`. The modified "exponent" field is encoded as follows:
+NaN (not-a-number) is encoded using an [extended exponent RVLQ](#extended-exponent-rvlq), encoding the exponent value `0`. The significand sign field determines whether it's a quiet or signaling NaN:
 
-| Field            | Size | Notes                                                     |
-| ---------------- | ---- | --------------------------------------------------------- |
-| NaN Payload      |   4+ | Right justified, leading zeroes and signaling bit omitted |
-| Signaling Bit    |    1 | 0 = quiet, 1 = signaling                                  |
-| 0                |    1 | Always 0                                                  |
-| Significand Sign |    1 | Copied from IEEE754 float NaN value                       |
-
-The `NaN payload` field contains the bit pattern of the original IEEE754 NaN value, signaling bit omitted, right-justified, with leading zero bits omitted.
-
-**Note:** An implementation must properly convert the `signaling bit` to/from the underlying signaling bit encoding of the platform it's running on.
+    10000000 00000000 = [80 00] = Quiet NaN
+    10000000 00000001 = [80 01] = Signaling NaN
 
 
 
 Rounding
 --------
 
-Compact float values must be rounded using IEEE754's recommended **round half to even** method, unless both sending and receiving parties have agreed to another method.
+When rounding for storage in compact float format, values must be rounded using IEEE754's recommended **round half to even** method, unless all sending and receiving parties have agreed to another method.
 
 
 
@@ -208,35 +200,6 @@ Significand field contents:
     Hex:         0xa7     0x5b
 
 Result: `[12 a7 5b]`
-
-
-### NaN
-
-Given a 32-bit IEEE754 decimal float with a raw value of `0xfe008410`:
-
-* Bits: `1111 1110 0000 0000 1000 0100 0001 0000`
-* Bit 31 `1` indicates a negative sign bit.
-* Bits 26-30 `11111` mark a NaN value.
-* Bit 25 `1` indicates that this is a signaling NaN.
-* Bits 0-24 form the NaN payload. After omitting leading zero bits, the payload is `0x8410`
-
-Exponent field contents:
-
-    Payload:   0x8410
-    Bits:      1000 0100 0001 0000
-    Signaling:                     1
-    0:                               0
-    Sign:                              1
-    Total:     1000 0100 0001 0000 1 0 1
-
-Build the exponent RVLQ:
-
-    Value:       1000010000010000101
-    Groups of 7: 10000 1000001 0000101
-    As RVLQ:     10010000 11000001 00000101
-    Hex:         0x90     0xc1     0x05
-
-Result: `[90 c1 05]`
 
 
 

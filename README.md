@@ -6,7 +6,7 @@ Compact float format is an encoding scheme to store a decimal floating point val
 Compact float can store all of the kinds of values that the IEEE754 decimal types can, without data loss:
 * ±0
 * ±infinity
-* Signaling and quiet NaNs, including payload
+* Signaling and quiet NaNs
 
 
 This specification is part of the [Specification Project](https://github.com/kstenerud/specifications)
@@ -23,7 +23,7 @@ Specifications
 Implementations
 ---------------
 
-* TODO
+* [C implementation](reference-implementation) (work-in-progress)
 
 
 

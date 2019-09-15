@@ -12,19 +12,18 @@ project_headers = [
 
 project_source_files = [
   'src/library.c',
-  'src/binary_float.c',
 ]
 
 project_test_files = [
   'tests/src/library.cpp',
-  'tests/src/binary_float.cpp',
   'tests/src/readme_examples_test.cpp'
 ]
 
 cc = meson.get_compiler('c')
 
 project_dependencies = [
-  dependency('vlq', fallback : ['vlq', 'vlq_dep'])
+  dependency('vlq', fallback : ['vlq', 'vlq_dep']),
+  dependency('kslog', fallback : ['kslog', 'kslog_dep'])
 ]
 
 build_args = [

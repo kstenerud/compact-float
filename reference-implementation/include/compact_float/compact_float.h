@@ -45,8 +45,7 @@
     #endif
 #endif
 
-/*
-// TODO: Decimal float support
+
 #ifdef __GNUC__
     #ifdef __cplusplus
         #include <decimal/decimal>
@@ -62,7 +61,7 @@
         #endif
     #endif
 #endif
-*/
+
 
 #ifdef __cplusplus 
 extern "C" {
@@ -105,8 +104,6 @@ COMPACT_FLOAT_PUBLIC int cfloat_binary_encode(double value, uint8_t* dst, int ds
 COMPACT_FLOAT_PUBLIC int cfloat_binary_decode(const uint8_t* src, int src_length, double* value);
 
 
-#if 0
-TODO: Decimal float support
 #ifdef SUPPORTS_DECFLOAT
 
 /**
@@ -132,7 +129,6 @@ ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_decimal_encode(_Decimal64 value, 
 ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_decimal_decode(const uint8_t* src, int src_length, _Decimal64* value);
 
 #endif // SUPPORTS_DECFLOAT
-#endif
 
 
 #ifdef __cplusplus 
