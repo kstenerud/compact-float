@@ -50,8 +50,8 @@
     #ifdef __cplusplus
         #include <decimal/decimal>
         // Hack: According to [ISO/IEC TR 24733], the compiler should supply this typedef
-        typedef std::decimal::decimal64 _Decimal64;
-        // #define _Decimal64 std::decimal::decimal64::__decfloat64
+        // typedef std::decimal::decimal64 _Decimal64;
+        #define _Decimal64 std::decimal::decimal64::__decfloat64
         #define SUPPORTS_DECFLOAT 1
     #else
         #define __STDC_WANT_DEC_FP__
