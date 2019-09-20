@@ -4,7 +4,7 @@
 
 // #define KSLog_FileDesriptor STDOUT_FILENO
 // #define KSLog_LocalMinLevel KSLOG_LEVEL_TRACE
-// #include <kslog/kslog.h>
+#include <kslog/kslog.h>
 
 #define QUOTE(str) #str
 #define EXPAND_AND_QUOTE(str) QUOTE(str)
@@ -60,10 +60,12 @@
 #define ENCODED_VALUE_QUIET_NAN     0x00
 #define ENCODED_VALUE_SIGNALING_NAN 0x01
 
+#define MAX_DIGITS_64_BIT 16
+
 
 #define shift_right_max(X) ((X) >> (sizeof(X) * 8 - 1))
 
-static inline int get_sign(uint64_t value)
+static inline unsigned get_sign(uint64_t value)
 {
     return (int)shift_right_max(value) & 1;
 }
@@ -97,7 +99,7 @@ static int encode_nan(bool is_signaling, uint8_t* dst, int dst_length)
     return encoded_length;
 }
 
-static int encode_infinity(int sign, uint8_t* dst, int dst_length)
+static int encode_infinity(unsigned sign, uint8_t* dst, int dst_length)
 {
     const int encoded_length = 2;
     if(dst_length < encoded_length)
@@ -105,19 +107,19 @@ static int encode_infinity(int sign, uint8_t* dst, int dst_length)
         return 0;
     }
     vlq_extend(dst, 1);
-    dst[1] = ENCODED_VALUE_POS_INFINITY | (shift_right_max(sign) & 1);
+    dst[1] = ENCODED_VALUE_POS_INFINITY | sign;
     KSLOG_TRACE("Encoded infinity with sign %d into %02x %02x", sign, dst[0], dst[1]);
     return encoded_length;
 }
 
-static int encode_zero(int sign, uint8_t* dst, int dst_length)
+static int encode_zero(unsigned sign, uint8_t* dst, int dst_length)
 {
     const int encoded_length = 1;
     if(dst_length < encoded_length)
     {
         return 0;
     }
-    dst[0] = ENCODED_VALUE_POS_0 | (shift_right_max(sign) & 1);
+    dst[0] = ENCODED_VALUE_POS_0 | sign;
     KSLOG_TRACE("Encoded zero with sign %d into %02x", sign, dst[0]);
     return encoded_length;
 }
@@ -155,18 +157,48 @@ const char* cfloat_version()
     return EXPAND_AND_QUOTE(PROJECT_VERSION);
 }
 
-int cfloat_binary_encoded_size(double value)
+ANSI_EXTENSION int cfloat_encoded_size_decimal(_Decimal64 value)
 {
-    // ANSI_EXTENSION _Decimal64 dvalue = value;
-    (void)value;
-    return 0;
-    // uint64_t significand_vlq = 0;
-    // const uint64_t data = get_float_data(value, &significand_vlq);
-    // const uint64_t exponent_vlq = data & ~FLOAT_DATA_FLAGS_MASK;
-    // const int base_length = (data & EXPONENT_IS_EXTENDED) ? 1 : 0;
-    // const int significand_length = (data & SIGNIFICAND_IS_PRESENT) ? lvlq_encoded_size_64(significand_vlq) : 0;
+    if(value == 0)
+    {
+        return 1;
+    }
 
-    // return base_length + rvlq_encoded_size_64(exponent_vlq) + significand_length;
+    uint64_t uvalue = 0;
+    memcpy(&uvalue, &value, sizeof(uvalue));
+
+    if(is_decimal_infinity(uvalue))
+    {
+        return 2;
+    }
+
+    if(is_decimal_nan(uvalue))
+    {
+        return 2;
+    }
+
+    uint64_t significand = 0;
+    int exponent = 0;
+    if((uvalue & MASK_EXTENDED) == VALUE_EXTENDED)
+    {
+        exponent = (uvalue >> SIZE_SIGNIFICAND_EXTENDED) & MASK_EXPONENT;
+        significand = (uvalue & MASK_SIGNIFICAND_EXTENDED) | PREFIX_SIGNIFICAND_EXTENDED;
+    }
+    else
+    {
+        exponent = (uvalue >> SIZE_SIGNIFICAND_NORMAL) & MASK_EXPONENT;
+        significand = uvalue & MASK_SIGNIFICAND_NORMAL;
+    }
+    exponent -= EXPONENT_BIAS;
+
+    while(significand % 10 == 0)
+    {
+        significand /= 10;
+        exponent++;
+    }
+
+    uint64_t exponent_field = absolute_value(exponent) << 2;
+    return rvlq_encoded_size_64(exponent_field) + rvlq_encoded_size_64(significand);
 }
 
 int cfloat_encode(int64_t exponent, int64_t significand, uint8_t* dst, int dst_length)
@@ -174,7 +206,7 @@ int cfloat_encode(int64_t exponent, int64_t significand, uint8_t* dst, int dst_l
     return encode_number(get_sign(significand), absolute_value(significand), get_sign(exponent), absolute_value(exponent), dst, dst_length);
 }
 
-ANSI_EXTENSION int cfloat_decimal_encode(_Decimal64 dvalue, uint8_t* dst, int dst_length)
+ANSI_EXTENSION int cfloat_encode_decimal(_Decimal64 dvalue, uint8_t* dst, int dst_length)
 {
     KSLOG_DEBUG("Encoding %f", (double)dvalue);
 
@@ -185,7 +217,7 @@ ANSI_EXTENSION int cfloat_decimal_encode(_Decimal64 dvalue, uint8_t* dst, int ds
     if(dvalue == 0)
     {
         // Can't compare to -0.0dd because -0.0 is equal to 0.0
-        return encode_zero(shift_right_max((int64_t)uvalue), dst, dst_length);
+        return encode_zero(get_sign(uvalue), dst, dst_length);
     }
 
     if(is_decimal_infinity(uvalue))
@@ -226,7 +258,7 @@ ANSI_EXTENSION int cfloat_decimal_encode(_Decimal64 dvalue, uint8_t* dst, int ds
     return encode_number(get_sign(uvalue), significand, get_sign(exponent), absolute_value(exponent), dst, dst_length);
 }
 
-ANSI_EXTENSION int cfloat_decimal_decode(const uint8_t* src, int src_length, _Decimal64* value)
+ANSI_EXTENSION int cfloat_decode_decimal(const uint8_t* src, int src_length, _Decimal64* value)
 {
     if(src_length < 1)
     {
@@ -347,20 +379,103 @@ ANSI_EXTENSION int cfloat_decimal_decode(const uint8_t* src, int src_length, _De
     return offset;
 }
 
-int cfloat_binary_encode(double fvalue, uint8_t* dst, int dst_length)
+int cfloat_encoded_size_binary(double value, int significant_digits)
+{
+    if(significant_digits <= 0 || significant_digits >= MAX_DIGITS_64_BIT)
+    {
+        return cfloat_encoded_size_decimal(value);
+    }
+
+    return 0;
+}
+
+int cfloat_encode_binary(double value, int significant_digits, uint8_t* dst, int dst_length)
 {
     if(dst_length < 1)
     {
         return 0;
     }
 
-    return cfloat_decimal_encode(fvalue, dst, dst_length);
+    ANSI_EXTENSION _Decimal64 dvalue = value;
+
+    if(significant_digits <= 0 || significant_digits >= MAX_DIGITS_64_BIT || dvalue == 0)
+    {
+        return cfloat_encode_decimal(dvalue, dst, dst_length);
+    }
+
+    uint64_t uvalue = 0;
+    memcpy(&uvalue, &dvalue, sizeof(uvalue));
+    KSLOG_TRACE("Raw value: %016lx", uvalue);
+
+    if(is_decimal_infinity(uvalue))
+    {
+        return encode_infinity(get_sign(uvalue), dst, dst_length);
+    }
+
+    if(is_decimal_nan(uvalue))
+    {
+        unsigned is_signaling = (uvalue >> SHIFT_SIGNALING_NAN) & 1;
+        return encode_nan(is_signaling, dst, dst_length);
+    }
+
+    uint64_t significand = 0;
+    int exponent = 0;
+    if((uvalue & MASK_EXTENDED) == VALUE_EXTENDED)
+    {
+        KSLOG_TRACE("Using extended VLQ");
+        exponent = (uvalue >> SIZE_SIGNIFICAND_EXTENDED) & MASK_EXPONENT;
+        significand = (uvalue & MASK_SIGNIFICAND_EXTENDED) | PREFIX_SIGNIFICAND_EXTENDED;
+    }
+    else
+    {
+        KSLOG_TRACE("Using normal VLQ");
+        exponent = (uvalue >> SIZE_SIGNIFICAND_NORMAL) & MASK_EXPONENT;
+        significand = uvalue & MASK_SIGNIFICAND_NORMAL;
+    }
+    exponent -= EXPONENT_BIAS;
+    KSLOG_TRACE("Post-bias: exp %d, sig %d", exponent, significand);
+
+    while(significand % 10 == 0)
+    {
+        significand /= 10;
+        exponent++;
+    }
+    KSLOG_TRACE("Reduced exp %d (%x), sig %ld (%lx)", exponent, exponent, significand, significand);
+
+    int current_digits = 1;
+    for(uint64_t sig_temp = significand / 10; sig_temp > 0; sig_temp /= 10)
+    {
+        current_digits++;
+    }
+
+    KSLOG_TRACE("Current digits %d", current_digits);
+    while(current_digits > significant_digits)
+    {
+        unsigned remainder = significand % 10;
+        significand /= 10;
+        if(remainder > 5)
+        {
+            significand++;
+        }
+        else if(remainder == 5)
+        {
+            if(significand & 1)
+            {
+                significand++;
+            }
+        }
+        current_digits--;
+        exponent++;
+    }
+    KSLOG_TRACE("Reduced to %d sig digits: %ld", significant_digits, significand);
+
+    return encode_number(get_sign(uvalue), significand, get_sign(exponent), absolute_value(exponent), dst, dst_length);
 }
 
-int cfloat_binary_decode(const uint8_t* src, int src_length, double* value)
+int cfloat_decode_binary(const uint8_t* src, int src_length, double* value)
 {
     ANSI_EXTENSION _Decimal64 dvalue = 0;
-    int result = cfloat_decimal_decode(src, src_length, &dvalue);
+    int result = cfloat_decode_decimal(src, src_length, &dvalue);
     if(result >= 1)
     {
         *value = dvalue;

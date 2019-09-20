@@ -15,9 +15,9 @@ static void print_buffer(const uint8_t* data, int length)
 static void demonstrate_encode()
 {
     double value = -3.23828125;
-    int size = cfloat_binary_encoded_size(value);
+    int size = cfloat_encoded_size_binary(value, 9);
     std::vector<uint8_t> data(size);
-    int encoded_count = cfloat_binary_encode(value, data.data(), data.size());
+    int encoded_count = cfloat_encode_binary(value, 9, data.data(), data.size());
     if(encoded_count <= 0)
     {
         // TODO: Error
@@ -29,7 +29,7 @@ static void demonstrate_decode()
 {
     std::vector<uint8_t> data = {0x04, 0xc0, 0xb0, 0x0f};
     double value = 0;
-    int decoded_count = cfloat_binary_decode(data.data(), data.size(), &value);
+    int decoded_count = cfloat_decode_binary(data.data(), data.size(), &value);
     if(decoded_count <= 0)
     {
         // TODO: Error
