@@ -86,7 +86,7 @@ static inline uint64_t absolute_value(int64_t value)
     return (value + mask) ^ mask;
 }
 
-static int encode_nan(bool is_signaling, uint8_t* dst, int dst_length)
+static inline int encode_nan(bool is_signaling, uint8_t* dst, int dst_length)
 {
     const int encoded_length = 2;
     if(dst_length < encoded_length)
@@ -99,7 +99,7 @@ static int encode_nan(bool is_signaling, uint8_t* dst, int dst_length)
     return encoded_length;
 }
 
-static int encode_infinity(unsigned sign, uint8_t* dst, int dst_length)
+static inline int encode_infinity(unsigned sign, uint8_t* dst, int dst_length)
 {
     const int encoded_length = 2;
     if(dst_length < encoded_length)
@@ -112,7 +112,7 @@ static int encode_infinity(unsigned sign, uint8_t* dst, int dst_length)
     return encoded_length;
 }
 
-static int encode_zero(unsigned sign, uint8_t* dst, int dst_length)
+static inline int encode_zero(unsigned sign, uint8_t* dst, int dst_length)
 {
     const int encoded_length = 1;
     if(dst_length < encoded_length)
@@ -148,6 +148,67 @@ static int encode_number(unsigned significand_sign, uint64_t significand, uint64
     return offset;
 }
 
+static void extract_float(uint64_t uvalue, int significant_digits, int* restrict exponent_ptr, uint64_t* restrict significand_ptr)
+{
+    uint64_t significand = 0;
+    int exponent = 0;
+    if((uvalue & MASK_EXTENDED) == VALUE_EXTENDED)
+    {
+        KSLOG_TRACE("Using extended VLQ");
+        exponent = (uvalue >> SIZE_SIGNIFICAND_EXTENDED) & MASK_EXPONENT;
+        significand = (uvalue & MASK_SIGNIFICAND_EXTENDED) | PREFIX_SIGNIFICAND_EXTENDED;
+    }
+    else
+    {
+        KSLOG_TRACE("Using normal VLQ");
+        exponent = (uvalue >> SIZE_SIGNIFICAND_NORMAL) & MASK_EXPONENT;
+        significand = uvalue & MASK_SIGNIFICAND_NORMAL;
+    }
+    exponent -= EXPONENT_BIAS;
+    KSLOG_TRACE("Post-bias: exp %d, sig %d", exponent, significand);
+
+    while(significand % 10 == 0)
+    {
+        significand /= 10;
+        exponent++;
+    }
+    KSLOG_TRACE("Reduced exp %d (%x), sig %ld (%lx)", exponent, exponent, significand, significand);
+
+    if(significant_digits > 0 && significant_digits < MAX_DIGITS_64_BIT)
+    {
+        int current_digits = 1;
+        for(uint64_t sig_temp = significand / 10; sig_temp > 0; sig_temp /= 10)
+        {
+            current_digits++;
+        }
+
+        KSLOG_TRACE("Current digits %d", current_digits);
+        while(current_digits > significant_digits)
+        {
+            unsigned remainder = significand % 10;
+            significand /= 10;
+            if(remainder > 5)
+            {
+                significand++;
+            }
+            else if(remainder == 5)
+            {
+                if(significand & 1)
+                {
+                    significand++;
+                }
+            }
+            current_digits--;
+            exponent++;
+        }
+        KSLOG_TRACE("Reduced to %d sig digits: %ld", significant_digits, significand);
+    }
+
+    *exponent_ptr = exponent;
+    *significand_ptr = significand;
+}
+
+
 // ----------
 // Public API
 // ----------
@@ -157,7 +218,7 @@ const char* cfloat_version()
     return EXPAND_AND_QUOTE(PROJECT_VERSION);
 }
 
-ANSI_EXTENSION int cfloat_encoded_size_decimal(_Decimal64 value)
+ANSI_EXTENSION int cfloat_encoded_size(_Decimal64 value, int significant_digits)
 {
     if(value == 0)
     {
@@ -179,34 +240,13 @@ ANSI_EXTENSION int cfloat_encoded_size_decimal(_Decimal64 value)
 
     uint64_t significand = 0;
     int exponent = 0;
-    if((uvalue & MASK_EXTENDED) == VALUE_EXTENDED)
-    {
-        exponent = (uvalue >> SIZE_SIGNIFICAND_EXTENDED) & MASK_EXPONENT;
-        significand = (uvalue & MASK_SIGNIFICAND_EXTENDED) | PREFIX_SIGNIFICAND_EXTENDED;
-    }
-    else
-    {
-        exponent = (uvalue >> SIZE_SIGNIFICAND_NORMAL) & MASK_EXPONENT;
-        significand = uvalue & MASK_SIGNIFICAND_NORMAL;
-    }
-    exponent -= EXPONENT_BIAS;
-
-    while(significand % 10 == 0)
-    {
-        significand /= 10;
-        exponent++;
-    }
+    extract_float(uvalue, significant_digits, &exponent, &significand);
 
     uint64_t exponent_field = absolute_value(exponent) << 2;
     return rvlq_encoded_size_64(exponent_field) + rvlq_encoded_size_64(significand);
 }
 
-int cfloat_encode(int64_t exponent, int64_t significand, uint8_t* dst, int dst_length)
-{
-    return encode_number(get_sign(significand), absolute_value(significand), get_sign(exponent), absolute_value(exponent), dst, dst_length);
-}
-
-ANSI_EXTENSION int cfloat_encode_decimal(_Decimal64 dvalue, uint8_t* dst, int dst_length)
+ANSI_EXTENSION int cfloat_encode(_Decimal64 dvalue, int significant_digits, uint8_t* dst, int dst_length)
 {
     KSLOG_DEBUG("Encoding %f", (double)dvalue);
 
@@ -233,32 +273,12 @@ ANSI_EXTENSION int cfloat_encode_decimal(_Decimal64 dvalue, uint8_t* dst, int ds
 
     uint64_t significand = 0;
     int exponent = 0;
-    if((uvalue & MASK_EXTENDED) == VALUE_EXTENDED)
-    {
-        KSLOG_TRACE("Using extended VLQ");
-        exponent = (uvalue >> SIZE_SIGNIFICAND_EXTENDED) & MASK_EXPONENT;
-        significand = (uvalue & MASK_SIGNIFICAND_EXTENDED) | PREFIX_SIGNIFICAND_EXTENDED;
-    }
-    else
-    {
-        KSLOG_TRACE("Using normal VLQ");
-        exponent = (uvalue >> SIZE_SIGNIFICAND_NORMAL) & MASK_EXPONENT;
-        significand = uvalue & MASK_SIGNIFICAND_NORMAL;
-    }
-    exponent -= EXPONENT_BIAS;
-    KSLOG_TRACE("Post-bias: exp %d, sig %d", exponent, significand);
-
-    while(significand % 10 == 0)
-    {
-        significand /= 10;
-        exponent++;
-    }
-    KSLOG_TRACE("Reduced exp %d (%x), sig %ld (%lx)", exponent, exponent, significand, significand);
+    extract_float(uvalue, significant_digits, &exponent, &significand);
 
     return encode_number(get_sign(uvalue), significand, get_sign(exponent), absolute_value(exponent), dst, dst_length);
 }
 
-ANSI_EXTENSION int cfloat_decode_decimal(const uint8_t* src, int src_length, _Decimal64* value)
+ANSI_EXTENSION int cfloat_decode(const uint8_t* src, int src_length, _Decimal64* value)
 {
     if(src_length < 1)
     {
@@ -377,108 +397,4 @@ ANSI_EXTENSION int cfloat_decode_decimal(const uint8_t* src, int src_length, _De
     memcpy(value, &uvalue, sizeof(*value));
     KSLOG_TRACE("Decoded %d bytes", offset);
     return offset;
-}
-
-int cfloat_encoded_size_binary(double value, int significant_digits)
-{
-    if(significant_digits <= 0 || significant_digits >= MAX_DIGITS_64_BIT)
-    {
-        return cfloat_encoded_size_decimal(value);
-    }
-
-    return 0;
-}
-
-int cfloat_encode_binary(double value, int significant_digits, uint8_t* dst, int dst_length)
-{
-    if(dst_length < 1)
-    {
-        return 0;
-    }
-
-    ANSI_EXTENSION _Decimal64 dvalue = value;
-
-    if(significant_digits <= 0 || significant_digits >= MAX_DIGITS_64_BIT || dvalue == 0)
-    {
-        return cfloat_encode_decimal(dvalue, dst, dst_length);
-    }
-
-    uint64_t uvalue = 0;
-    memcpy(&uvalue, &dvalue, sizeof(uvalue));
-    KSLOG_TRACE("Raw value: %016lx", uvalue);
-
-    if(is_decimal_infinity(uvalue))
-    {
-        return encode_infinity(get_sign(uvalue), dst, dst_length);
-    }
-
-    if(is_decimal_nan(uvalue))
-    {
-        unsigned is_signaling = (uvalue >> SHIFT_SIGNALING_NAN) & 1;
-        return encode_nan(is_signaling, dst, dst_length);
-    }
-
-    uint64_t significand = 0;
-    int exponent = 0;
-    if((uvalue & MASK_EXTENDED) == VALUE_EXTENDED)
-    {
-        KSLOG_TRACE("Using extended VLQ");
-        exponent = (uvalue >> SIZE_SIGNIFICAND_EXTENDED) & MASK_EXPONENT;
-        significand = (uvalue & MASK_SIGNIFICAND_EXTENDED) | PREFIX_SIGNIFICAND_EXTENDED;
-    }
-    else
-    {
-        KSLOG_TRACE("Using normal VLQ");
-        exponent = (uvalue >> SIZE_SIGNIFICAND_NORMAL) & MASK_EXPONENT;
-        significand = uvalue & MASK_SIGNIFICAND_NORMAL;
-    }
-    exponent -= EXPONENT_BIAS;
-    KSLOG_TRACE("Post-bias: exp %d, sig %d", exponent, significand);
-
-    while(significand % 10 == 0)
-    {
-        significand /= 10;
-        exponent++;
-    }
-    KSLOG_TRACE("Reduced exp %d (%x), sig %ld (%lx)", exponent, exponent, significand, significand);
-
-    int current_digits = 1;
-    for(uint64_t sig_temp = significand / 10; sig_temp > 0; sig_temp /= 10)
-    {
-        current_digits++;
-    }
-
-    KSLOG_TRACE("Current digits %d", current_digits);
-    while(current_digits > significant_digits)
-    {
-        unsigned remainder = significand % 10;
-        significand /= 10;
-        if(remainder > 5)
-        {
-            significand++;
-        }
-        else if(remainder == 5)
-        {
-            if(significand & 1)
-            {
-                significand++;
-            }
-        }
-        current_digits--;
-        exponent++;
-    }
-    KSLOG_TRACE("Reduced to %d sig digits: %ld", significant_digits, significand);
-
-    return encode_number(get_sign(uvalue), significand, get_sign(exponent), absolute_value(exponent), dst, dst_length);
-}
-
-int cfloat_decode_binary(const uint8_t* src, int src_length, double* value)
-{
-    ANSI_EXTENSION _Decimal64 dvalue = 0;
-    int result = cfloat_decode_decimal(src, src_length, &dvalue);
-    if(result >= 1)
-    {
-        *value = dvalue;
-    }
-    return result;
 }

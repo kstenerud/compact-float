@@ -46,20 +46,11 @@
 #endif
 
 
-#ifdef __GNUC__
-    #ifdef __cplusplus
-        #include <decimal/decimal>
-        // Hack: According to [ISO/IEC TR 24733], the compiler should supply this typedef
-        // typedef std::decimal::decimal64 _Decimal64;
-        #define _Decimal64 std::decimal::decimal64::__decfloat64
-        #define SUPPORTS_DECFLOAT 1
-    #else
-        #define __STDC_WANT_DEC_FP__
-        #include <float.h>
-        #ifdef DEC_EVAL_METHOD
-            #define SUPPORTS_DECFLOAT 1
-        #endif
-    #endif
+#ifdef __cplusplus
+    #include <decimal/decimal>
+    // Hack: According to [ISO/IEC TR 24733], the compiler should supply this typedef
+    // typedef std::decimal::decimal64 _Decimal64;
+    #define _Decimal64 std::decimal::decimal64::__decfloat64
 #endif
 
 
@@ -85,32 +76,7 @@ COMPACT_FLOAT_PUBLIC const char* cfloat_version();
  * Calculate the number of bytes that would be occupied by this float when
  * encoded.
  */
-COMPACT_FLOAT_PUBLIC int cfloat_encoded_size_binary(double value, int significant_digits);
-
-/**
- * Encode a binary float to a destination buffer.
- *
- * Returns the number of bytes written to encode the value, or 0 if there wasn't
- * enough room.
- */
-COMPACT_FLOAT_PUBLIC int cfloat_encode_binary(double value, int significant_digits, uint8_t* dst, int dst_length);
-
-/**
- * Decode a binary float from a source buffer.
- *
- * Returns the number of bytes read to decode the value, or 0 if there wasn't
- * enough data.
- */
-COMPACT_FLOAT_PUBLIC int cfloat_decode_binary(const uint8_t* src, int src_length, double* value);
-
-
-#ifdef SUPPORTS_DECFLOAT
-
-/**
- * Calculate the number of bytes that would be occupied by this float when
- * encoded.
- */
-ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_encoded_size_decimal(_Decimal64 value);
+ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_encoded_size(_Decimal64 value, int significant_digits);
 
 /**
  * Encode a decimal float to a destination buffer.
@@ -118,7 +84,7 @@ ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_encoded_size_decimal(_Decimal64 v
  * Returns the number of bytes written to encode the date, or 0 if there wasn't
  * enough room.
  */
-ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_encode_decimal(_Decimal64 value, uint8_t* dst, int dst_length);
+ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_encode(_Decimal64 value, int significant_digits, uint8_t* dst, int dst_length);
 
 /**
  * Decode a decimal float from a source buffer.
@@ -126,9 +92,7 @@ ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_encode_decimal(_Decimal64 value, 
  * Returns the number of bytes read to decode the date, or 0 if there wasn't
  * enough data.
  */
-ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_decode_decimal(const uint8_t* src, int src_length, _Decimal64* value);
-
-#endif // SUPPORTS_DECFLOAT
+ANSI_EXTENSION COMPACT_FLOAT_PUBLIC int cfloat_decode(const uint8_t* src, int src_length, _Decimal64* value);
 
 
 #ifdef __cplusplus 
