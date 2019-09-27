@@ -23,7 +23,7 @@ Specifications
 Implementations
 ---------------
 
-* [C implementation](reference-implementation)
+* [C implementation](https://github.com/kstenerud/c-compact-float)
 * [Go implementation](https://github.com/kstenerud/go-compact-float)
 
 
