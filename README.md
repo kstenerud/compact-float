@@ -9,7 +9,7 @@ Compact float can store all of the kinds of values that the IEEE754 decimal type
 * Signaling and quiet NaNs
 
 
-This specification is part of the [Specification Project](https://github.com/kstenerud/specifications)
+This specification is part of the [Specifications Project](https://github.com/kstenerud/specifications)
 
 
 
@@ -23,7 +23,8 @@ Specifications
 Implementations
 ---------------
 
-* [C implementation](reference-implementation) (work-in-progress)
+* [C implementation](reference-implementation)
+* [Go implementation](https://github.com/kstenerud/go-compact-float)
 
 
 
