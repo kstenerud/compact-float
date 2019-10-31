@@ -14,8 +14,8 @@ Contents
 --------
 
 * [Encoded Structure](#encoded-structure)
-  - [Exponent RVLQ](#exponent-rvlq)
-  - [Significand RVLQ](#significand-rvlq)
+  - [Exponent Structure](#exponent-structure)
+  - [Significand Structure](#significand-structure)
 * [Special Values](#special-values)
   - [Zero](#zero)
   - [Infinity](#infinity)
@@ -39,17 +39,17 @@ A compact float value is encoded into one or two [RVLQ](https://github.com/ksten
 
 #### Normal Value Encoding:
 
-    [Exponent RVLQ] [Significand RVLQ]
+    [Exponent structure (RVLQ)] [Significand structure (RVLQ)]
 
 #### [Special Value](#special-values) Encoding:
 
-    [Exponent RVLQ]
+    [Exponent structure (RVLQ)]
 
 
 
-### Exponent RVLQ
+### Exponent Structure
 
-The exponent RVLQ is a bit field containing the significand sign, exponent sign, and exponent magnitude:
+The exponent structure is a bit field containing the significand sign, exponent sign, and exponent magnitude:
 
 | Field              | Bits | Notes                      |
 | ------------------ | ---- | -------------------------- |
@@ -72,7 +72,7 @@ Examples:
 | `[9f 40]`   | `[80 9f 40]`  |
 
 
-### Significand RVLQ
+### Significand Structure
 
 | Field                 | Bits |
 | --------------------- | ---- |
@@ -85,7 +85,7 @@ The `significand magnitude` is an absolute integer value that will be multiplied
 Special Values
 --------------
 
-Special values are encoded entirely into the exponent RVLQ, and have no significand RVLQ structure.
+Special values are encoded entirely into the exponent structure, and have no significand structure.
 
 
 ### Zero
@@ -116,7 +116,7 @@ NaN (not-a-number) is encoded using an [extended exponent RVLQ](#extended-expone
 Rounding
 --------
 
-When rounding for storage in compact float format, values must be rounded using IEEE754's recommended **round half to even** method, unless all sending and receiving parties have agreed to another method.
+When rounding for storage in compact float format, values must be rounded using IEEE754's **round half to even** method (also known as banker's rounding), unless all sending and receiving parties have agreed to another method.
 
 
 
@@ -131,7 +131,7 @@ For example, the value 4.09104981 rounded to 5 significant digits is 4.0910, whi
     Exponent: -4
     Effective value: 4.091
 
-Encoding 5 significant digits would require 4 bytes. However, since the last digit is 0, it can be removed from the encoding while still resulting in the same effective value:
+Encoding 5 significant digits would require 4 bytes. However, since the last digit is 0, it may be removed from the encoding while still resulting in the same effective value:
 
     Significand: 4091
     Exponent: -3
@@ -146,16 +146,20 @@ How much precision do you need?
 
 When rounding float values, consider what level of precision you actually need; it's probably less than you'd think.
 
-* With 6 significant digits, you'd have a margin of error of 1mm for a measure of 1km, for example.
+* With 6 significant digits, you'd have a margin of error of 1mm for a measure of 1km, for example. If you're having trouble visualizing this, it's roughly equivalent to worrying over a thousandth of an inch (or a tenth of a millimeter) when measuring an American football field.
 * The [International Council for Science](https://physics.nist.gov/cuu/Constants/index.html) accepted physical constants are mostly between 9 and 12 significant digits.
 * NASA's International Space Station Guidance Navigation and Control System (GNC) uses 15 significant digits.
 * The Space Integrated Global Positioning System/Inertial Navigation System (SIGI) uses 16 significant digits.
 * The fundamental constants of the universe are useful to 32 significant digits.
 * 40 significant digits would allow measuring the entire universe with a margin of error less than the width of a hydrogen atom.
 
-For most real-world measures, you'll rarely need more than 4 significant digits outside of financial and scientific data.
+By comparison, ieee754 floating point format stores 7 significant digits for 32-bit values, 16 significant digits for 64-bit values, 34 significant digits for 128-bit values, and a whopping 71 significant digits for 256-bit values!
 
-Storing more significant digits takes up more space. Here's a breakdown of the encoded compact float size in bytes for significant digits up to 16 (assuming 1 byte of exponent data, which gives a max/min exponent of ±31):
+Storing values at a higher precision than your measuring system's accuracy leads to [false precision](https://en.wikipedia.org/wiki/False_precision).
+
+For most real-world measures, you'll rarely need more than 4 significant digits outside of financial and high accuracy scientific data.
+
+Storing more significant digits takes up more space. Here's a breakdown of the encoded compact float size in bytes for significant digits up to 16 (assuming 1 byte of exponent data, which gives a min/max exponent of ±31 for a range of almost ±0.000000000000000000000000000000001 to ±100,000,000,000,000,000,000,000,000,000,000):
 
 | Digits | Bytes |
 | ------ | ----- |
@@ -174,7 +178,7 @@ Examples
 
 ### Binary float value ~ 0.5083299875259399, rounded to 4 significant digits
 
-Binary floats are rarely directly representable in base 10. If we took the value 0.5083299875259399 as-is, we would be encoding many digits of false precision. For the purposes of this example, assume that after auditing our source precision and requirements, we settle upon 4 significant digits, representing the value as 0.5083.
+Binary floats are rarely directly representable in base 10. If we took the value 0.5083299875259399 as-is, we would be encoding many digits of false precision. For the purposes of this example we assume that, after auditing our measurement accuracy and precision requirements, we settle upon 4 significant digits, representing the value as 0.5083.
 
  * Significand: 5083
  * Exponent: -4
@@ -206,6 +210,6 @@ Result: `[12 a7 5b]`
 License
 -------
 
-Copyright 2019 Karl Stenerud
+Copyright (C) Karl Stenerud
 
 Specification released under Creative Commons Attribution 4.0 International Public License https://creativecommons.org/licenses/by/4.0/
