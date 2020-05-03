@@ -3,7 +3,8 @@ Compact Float Format
 
 Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission.
 
-Compact float can store all of the kinds of values that the IEEE754 decimal types can, without data loss:
+Compact float format can store the same special values that the IEEE754 decimal types can:
+
 * ±0
 * ±infinity
 * Signaling and quiet NaNs
@@ -35,15 +36,15 @@ The general conceptual form of a floating point number is:
 
     value = sign * significand * 10 ^ (exponent * exponent_sign)
 
-A compact float value is encoded into one or two [RVLQ](https://github.com/kstenerud/vlq/blob/master/vlq-specification.md) structures, depending on the value being stored:
+A compact float value is encoded into one or two [unsigned LEB128](https://en.wikipedia.org/wiki/LEB128) structures, depending on the value being stored:
 
 #### Normal Value Encoding:
 
-    [Exponent structure (RVLQ)] [Significand structure (RVLQ)]
+    [Exponent structure (ULEB128)] [Significand structure (ULEB128)]
 
 #### [Special Value](#special-values) Encoding:
 
-    [Exponent structure (RVLQ)]
+    [Exponent structure (ULEB128)]
 
 
 
@@ -59,17 +60,16 @@ The exponent structure is a bit field containing the significand sign, exponent 
 
 `exponent magnitude` is an absolute integer value representing (10 ^ exponent). The `exponent sign` determines whether the exponent is multiplied by `1` or `-1`.
 
-#### Extended Exponent RVLQ
+#### Extended Exponent
 
-Some special values are signaled by an extended exponent RVLQ, which is an RVLQ that is encoded into one more group than is necessary to hold the exponent value.
+Some special values are signaled by an extended exponent, which is a ULEB128 that is encoded into one more group than is necessary to hold the value.
 
 Examples:
 
 | Normal RVLQ | Extended RVLQ |
 | ----------- | ------------- |
 | `[00]`      | `[80 00]`     |
-| `[7c]`      | `[80 7c]`     |
-| `[9f 40]`   | `[80 9f 40]`  |
+| `[7c]`      | `[fc 00]`     |
 
 
 ### Significand Structure
@@ -98,18 +98,18 @@ Zero values (±0) are encoded using an exponent value of `-0`, which is an other
 
 ### Infinity
 
-Infinity is encoded using an [extended exponent RVLQ](#extended-exponent-rvlq), encoding the exponent value `-0`. The significand sign field determines whether it's positive or negative infinity.
+Infinity is encoded using an [extended exponent](#extended-exponent) that encodes the exponent value `-0`. The significand sign field determines whether it's positive or negative infinity.
 
-    10000000 00000010 = [80 02] = +infinity
-    10000000 00000011 = [80 03] = -infinity
+    10000010 00000000 = [82 00] = +infinity
+    10000011 00000000 = [83 00] = -infinity
 
 
 ### NaN
 
-NaN (not-a-number) is encoded using an [extended exponent RVLQ](#extended-exponent-rvlq), encoding the exponent value `0`. The significand sign field determines whether it's a quiet or signaling NaN:
+NaN (not-a-number) is encoded using an [extended exponent](#extended-exponent) that encodes the exponent value `0`. The significand sign field determines whether it's a quiet or signaling NaN:
 
     10000000 00000000 = [80 00] = Quiet NaN
-    10000000 00000001 = [80 01] = Signaling NaN
+    10000001 00000000 = [81 00] = Signaling NaN
 
 
 
@@ -197,13 +197,13 @@ Build the exponent RVLQ:
 
 Significand field contents:
 
-    Value:       5083 (13db)
+    Value:       5083 (0x13db)
     Binary:      0001 0011 1101 1011
     Groups of 7: 00 0100111 1011011
-    As RVLQ:     10100111 01011011
-    Hex:         0xa7     0x5b
+    As RVLQ:     11011011 00100111
+    Hex:         0xdb     0x47
 
-Result: `[12 a7 5b]`
+Result: `[12 db 47]`
 
 
 
