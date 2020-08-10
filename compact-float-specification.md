@@ -66,10 +66,10 @@ Some special values are signaled by an extended exponent, which is a ULEB128 tha
 
 Examples:
 
-| Normal RVLQ | Extended RVLQ |
-| ----------- | ------------- |
-| `[00]`      | `[80 00]`     |
-| `[7c]`      | `[fc 00]`     |
+| Normal | Extended  |
+| ------ | --------- |
+| `[00]` | `[80 00]` |
+| `[7c]` | `[fc 00]` |
 
 
 ### Significand Structure
@@ -190,7 +190,7 @@ Exponent field contents:
     Significand sign:         0
     Total:              100 1 0
 
-Build the exponent RVLQ:
+Build the exponent ULEB128:
 
     Value: 00010010
     Hex:   0x12
@@ -200,7 +200,7 @@ Significand field contents:
     Value:       5083 (0x13db)
     Binary:      0001 0011 1101 1011
     Groups of 7: 00 0100111 1011011
-    As RVLQ:     11011011 00100111
+    As ULEB128:  11011011 00100111
     Hex:         0xdb     0x47
 
 Result: `[12 db 47]`
