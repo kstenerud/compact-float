@@ -201,9 +201,9 @@ Significand field contents:
     Binary:      0001 0011 1101 1011
     Groups of 7: 00 0100111 1011011
     As ULEB128:  11011011 00100111
-    Hex:         0xdb     0x47
+    Hex:         0xdb     0x27
 
-Result: `[12 db 47]`
+Result: `[12 db 27]`
 
 
 
