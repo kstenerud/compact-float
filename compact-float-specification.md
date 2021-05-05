@@ -1,13 +1,14 @@
 Compact Float Format
 ====================
 
-Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission.
+Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission. It can store the same regular and special values that the IEEE754 types can, with unlimite range.
 
-Compact float format can store the same special values that the IEEE754 decimal types can:
+**Features**:
 
-* ±0
-* ±infinity
-* Signaling and quiet NaNs
+ * Unlimited significand and exponent sizes
+ * ±0
+ * ±infinity
+ * Signaling and quiet NaNs
 
 
 
@@ -24,7 +25,6 @@ Contents
 * [Rounding](#rounding)
 * [Smallest Possible Size](#smallest-possible-size)
 * [How much precision do you need?](#how-much-precision-do-you-need)
-* [Examples](#examples)
 * [License](#license)
 
 
@@ -36,94 +36,155 @@ The general conceptual form of a floating point number is:
 
     value = sign * significand * 10 ^ (exponent * exponent_sign)
 
-A compact float value is encoded into one or two [unsigned LEB128](https://en.wikipedia.org/wiki/LEB128) structures, depending on the value being stored:
+A compact float value is encoded into one or two structures, depending on the value being stored. These structures are then encoded as [unsigned LEB128](https://en.wikipedia.org/wiki/LEB128).
 
 #### Normal Value Encoding:
 
-    [Exponent structure (ULEB128)] [Significand structure (ULEB128)]
+Normal values are stored in two adjacent ULEB128-encoded structures: one for the exponent, and one for the significand.
 
-#### [Special Value](#special-values) Encoding:
+    [Exponent structure] [Significand structure]
 
-    [Exponent structure (ULEB128)]
+#### Special Value Encoding:
 
+[Special values](#special-values) such as NaNs and infinities are represented by single, special values that are 1-2 bytes long.
+
+    [special value]
 
 
 ### Exponent Structure
 
-The exponent structure is a bit field containing the significand sign, exponent sign, and exponent magnitude:
+The exponent structure is a ULEB128-encoded bit field containing the significand sign, exponent sign, and exponent magnitude:
 
 | Field              | Bits | Notes                      |
 | ------------------ | ---- | -------------------------- |
-| Exponent Magnitude |   5+ | exponent high bits         |
+| Exponent Magnitude |   5+ |                            |
 | Exponent Sign      |    1 | 0 = positive, 1 = negative |
 | Significand Sign   |    1 | 0 = positive, 1 = negative |
 
-`exponent magnitude` is an absolute integer value representing (10 ^ exponent). The `exponent sign` determines whether the exponent is multiplied by `1` or `-1`.
-
-#### Extended Exponent
-
-Some special values are signaled by an extended exponent, which is a ULEB128 that is encoded into one more group than is necessary to hold the value.
-
-Examples:
-
-| Normal | Extended  |
-| ------ | --------- |
-| `[00]` | `[80 00]` |
-| `[7c]` | `[fc 00]` |
+`exponent magnitude` is an absolute integer value representing (10 ^ exponent). The `exponent sign` determines whether the exponent is multiplied by `1` or `-1`. Similarly, `significand sign` determines the sign of the [significand](#significand-structure).
 
 
 ### Significand Structure
+
+The `significand magnitude` gets multiplied by the `significand sign` and finished exponent to produce the final value.
 
 | Field                 | Bits |
 | --------------------- | ---- |
 | Significand Magnitude |   7+ |
 
-The `significand magnitude` is an absolute integer value that will be multiplied by the `significand sign` and the `exponent`.
+Significand values larger than 127 follow standard ULEB128 encoding rules (for example, 128 is encoded as `[80 01]`).
+
+
+**Example**: Value 0.1
+
+ * Exponent: `1` (exponent = 1)
+ * Exp sign: `1` (exponent sign = negative)
+ * Sig sign: `0` (significand sign = positive)
+ * Significand: `1` (significand = 1)
+ * Exponent struct: `0000110`
+ * Significand struct: `0000001`
+ * All bits, with ULEB128 encoding: `0 0000110`, `0 0000001` = `[06 01]`
+
+**Example**: Value 1.0e+10000
+
+ * Exponent: `10011100010000` (exponent = 10000)
+ * Exp sign: `0` (exponent sign = positive)
+ * Sig sign: `0` (significand sign = positive)
+ * Significand: `1` (significand = 1)
+ * Exponent struct: `1001110001000000`
+ * Significand struct: `0000001`
+ * All bits, with ULEB128 encoding: `1 1000000 1 0111000 0 0000010`, `0 0000001` = `[c0 b8 02 01]`
+
+**Example**: Value -1.94618882e-200
+
+ * Exponent: `11010000` (exponent = 208 due to the extra 8 digits required to shift significand from 194618882 to 1.94618882)
+ * Exp sign: `1` (exponent sign = negative)
+ * Sig sign: `1` (significand sign = negative)
+ * Significand: `1011100110011010011000000010` (significand = 194618882)
+ * Exponent struct: `00001101000011`
+ * Significand struct: `1011100110011010011000000010`
+ * All bits, with ULEB128 encoding: `1 1000011 0 0000110`, `1 0000010 1 1001100 1 1100110 0 1011100` = `[c3 06 82 cc e6 5c]`
 
 
 
 Special Values
 --------------
 
-Special values are encoded entirely into the exponent structure, and have no significand structure.
+Special values are special 1 or 2 byte sequences that **MUST** be checked against before attempting to decode as a general case [exponent structure](#exponent-structure).
 
 
 ### Zero
 
-Zero values (±0) are encoded using an exponent value of `-0`, which is an otherwise impossible value. The significand sign field determines whether it's positive or negative 0.
+Zero values (±0) are encoded as follows:
 
     00000010 = [02] = +0
     00000011 = [03] = -0
 
+(Interpreted as an expont structure, this would correspond to an exponent value of `-0`, which is an otherwise impossible value)
+
 
 ### Infinity
 
-Infinity is encoded using an [extended exponent](#extended-exponent) that encodes the exponent value `-0`. The significand sign field determines whether it's positive or negative infinity.
+Infinity is encoded as follows:
 
     10000010 00000000 = [82 00] = +infinity
     10000011 00000000 = [83 00] = -infinity
 
+These values would normally decode as ULEB128 to values `2` and `3`, the only difference being that they are artificially extended by 1 group. Decoders **MUST** therefore check for the sequences `82 00` and `83 00` before moving on to the general encoding.
+
 
 ### NaN
 
-NaN (not-a-number) is encoded using an [extended exponent](#extended-exponent) that encodes the exponent value `0`. The significand sign field determines whether it's a quiet or signaling NaN:
+NaN (not-a-number) is encoded as follows:
 
     10000000 00000000 = [80 00] = Quiet NaN
     10000001 00000000 = [81 00] = Signaling NaN
+
+These values would normally decode as ULEB128 to values `0` and `1`, the only difference being that they are artificially extended by 1 group. Decoders **MUST** therefore check for the sequences `80 00` and `81 00` before moving on to the general encoding.
 
 
 
 Rounding
 --------
 
-When rounding for storage in compact float format, values must be rounded using IEEE754's **round half to even** method (also known as banker's rounding), unless all sending and receiving parties have agreed to another method.
+When rounding for storage in compact float format, values **MUST** default to rounding using IEEE754's **round half to even** method (also known as banker's rounding), unless all sending and receiving parties have agreed to another method.
+
+
+**Example**: Binary float value ~ 0.5083299875259399, rounded to 4 significant digits
+
+Binary floats are rarely directly representable in base 10. If we took the value 0.5083299875259399 as-is, we would be encoding many digits of false precision. For the purposes of this example we assume that, after auditing our measurement accuracy and precision requirements, we settle upon 4 significant digits, representing the value as 0.5083.
+
+ * Significand: 5083
+ * Exponent: -4
+
+Exponent field contents:
+
+    Exponent magnitude: 100
+    Exponent sign:          1
+    Significand sign:         0
+    Total:              100 1 0
+
+Build the exponent ULEB128:
+
+    Value: 00010010
+    Hex:   0x12
+
+Significand field contents:
+
+    Value:       5083 (0x13db)
+    Binary:      0001 0011 1101 1011
+    Groups of 7: 00 0100111 1011011
+    As ULEB128:  11011011 00100111
+    Hex:         0xdb     0x27
+
+Result: `[12 db 27]`
 
 
 
 Smallest Possible Size
 ----------------------
 
-As compact float values are not normalized, the same value can be represented in many ways. An encoder must store values in as few bytes as possible without losing data.
+As compact float values are not normalized, the same value can be represented in many ways. An encoder **MUST** store values in as few bytes as possible without losing data beyond normal rounding.
 
 For example, the value 4.09104981 rounded to 5 significant digits is 4.0910, which could be naively encoded as follows:
 
@@ -131,7 +192,7 @@ For example, the value 4.09104981 rounded to 5 significant digits is 4.0910, whi
     Exponent: -4
     Effective value: 4.091
 
-Encoding 5 significant digits would require 4 bytes. However, since the last digit is 0, it may be removed from the encoding while still resulting in the same effective value:
+Encoding 5 significant digits would require 4 bytes. However, since the last digit is 0, it can be removed from the encoding while still resulting in the same effective value:
 
     Significand: 4091
     Exponent: -3
@@ -170,40 +231,6 @@ Storing more significant digits takes up more space. Here's a breakdown of the e
 | 10-11  |   6   |
 | 12-14  |   7   |
 | 15-16  |   8   |
-
-
-
-Examples
---------
-
-### Binary float value ~ 0.5083299875259399, rounded to 4 significant digits
-
-Binary floats are rarely directly representable in base 10. If we took the value 0.5083299875259399 as-is, we would be encoding many digits of false precision. For the purposes of this example we assume that, after auditing our measurement accuracy and precision requirements, we settle upon 4 significant digits, representing the value as 0.5083.
-
- * Significand: 5083
- * Exponent: -4
-
-Exponent field contents:
-
-    Exponent magnitude: 100
-    Exponent sign:          1
-    Significand sign:         0
-    Total:              100 1 0
-
-Build the exponent ULEB128:
-
-    Value: 00010010
-    Hex:   0x12
-
-Significand field contents:
-
-    Value:       5083 (0x13db)
-    Binary:      0001 0011 1101 1011
-    Groups of 7: 00 0100111 1011011
-    As ULEB128:  11011011 00100111
-    Hex:         0xdb     0x27
-
-Result: `[12 db 27]`
 
 
 
