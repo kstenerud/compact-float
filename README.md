@@ -4,6 +4,7 @@ Compact Float Format
 Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission.
 
 Compact float can store all of the kinds of values that [IEEE754 decimal types](https://en.wikipedia.org/wiki/IEEE_754) can to unlimited range, and without data loss:
+
 * ±0
 * ±infinity
 * Signaling and quiet NaNs
