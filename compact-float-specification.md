@@ -1,7 +1,7 @@
 Compact Float Format
 ====================
 
-Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission. It can store the same regular and special values that the IEEE754 types can, with unlimite range.
+Compact float format is an encoding scheme to store a decimal floating point value in as few bytes as possible for data transmission. It can store the same regular and special values that [IEEE754 decimal types](https://en.wikipedia.org/wiki/IEEE_754) can, with unlimite range.
 
 **Features**:
 
@@ -15,58 +15,90 @@ Compact float format is an encoding scheme to store a decimal floating point val
 Contents
 --------
 
-* [Encoded Structure](#encoded-structure)
-  - [Exponent Structure](#exponent-structure)
-  - [Significand Structure](#significand-structure)
-* [Special Values](#special-values)
-  - [Zero](#zero)
-  - [Infinity](#infinity)
-  - [NaN](#nan)
-* [Rounding](#rounding)
-* [Smallest Possible Size](#smallest-possible-size)
-* [How much precision do you need?](#how-much-precision-do-you-need)
-* [License](#license)
+- [Compact Float Format](#compact-float-format)
+  - [Contents](#contents)
+  - [Special Value Encoding](#special-value-encoding)
+    - [Zero](#zero)
+    - [Infinity](#infinity)
+    - [NaN](#nan)
+  - [Normal Value Encoding](#normal-value-encoding)
+    - [Exponent and Signs](#exponent-and-signs)
+    - [Significand](#significand)
+    - [Examples](#examples)
+  - [Rounding](#rounding)
+  - [Smallest Possible Size](#smallest-possible-size)
+  - [How much precision do you need?](#how-much-precision-do-you-need)
+  - [License](#license)
 
 
 
-Encoded Structure
------------------
+Special Value Encoding
+----------------------
+
+Special values are 1 or 2 byte sequences that **MUST** be checked against first before attempting to decode as a [normal value](#normal-value-encoding).
+
+
+### Zero
+
+Zero values (±0) are encoded as follows:
+
+    00000010 = [02] = +0
+    00000011 = [03] = -0
+
+Interpreted as an [expont structure](#exponent-and-signs), this would normally correspond to an exponent value of `-0`, which is an impossible value.
+
+
+### Infinity
+
+Infinity is encoded as follows:
+
+    10000010 00000000 = [82 00] = +infinity
+    10000011 00000000 = [83 00] = -infinity
+
+These [ULEB128](https://en.wikipedia.org/wiki/LEB128)-encoded values would normally decode to an exponent value of `-0` (like for [zero](#zero)), the only difference being that they are artificially extended by 1 group.
+
+
+### NaN
+
+NaN (not-a-number) is encoded as follows:
+
+    10000000 00000000 = [80 00] = Quiet NaN
+    10000001 00000000 = [81 00] = Signaling NaN
+
+These [ULEB128](https://en.wikipedia.org/wiki/LEB128)-encoded values would normally decode to an exponent value of `0`, the only difference being that they are artificially extended by 1 group.
+
+
+
+Normal Value Encoding
+---------------------
 
 The general conceptual form of a floating point number is:
 
-    value = sign * significand * 10 ^ (exponent * exponent_sign)
+    value = significand × baseᵉˣᵖᵒⁿᵉⁿᵗ
 
-A compact float value is encoded into one or two structures, depending on the value being stored. These structures are then encoded as [unsigned LEB128](https://en.wikipedia.org/wiki/LEB128).
+Where significand = (significand magnitude × significand sign), and exponent = (exponent magnitude × exponent sign).
 
-#### Normal Value Encoding:
+Normal values are stored in two adjacent [ULEB128](https://en.wikipedia.org/wiki/LEB128)-encoded structures:
 
-Normal values are stored in two adjacent ULEB128-encoded structures: one for the exponent, and one for the significand.
-
-    [Exponent structure] [Significand structure]
-
-#### Special Value Encoding:
-
-[Special values](#special-values) such as NaNs and infinities are represented by single, special values that are 1-2 bytes long.
-
-    [special value]
+    [Exponent and signs] [Significand]
 
 
-### Exponent Structure
+### Exponent and Signs
 
-The exponent structure is a ULEB128-encoded bit field containing the significand sign, exponent sign, and exponent magnitude:
+This structure is a [ULEB128](https://en.wikipedia.org/wiki/LEB128)-encoded bit field containing the exponent portions (sign and magnitude), as well as the sign of the significand:
 
-| Field              | Bits | Notes                      |
-| ------------------ | ---- | -------------------------- |
-| Exponent Magnitude |   5+ |                            |
-| Exponent Sign      |    1 | 0 = positive, 1 = negative |
-| Significand Sign   |    1 | 0 = positive, 1 = negative |
+| Field              | Bits | Notes                               |
+| ------------------ | ---- | ----------------------------------- |
+| Exponent Magnitude |   5+ |                                     |
+| Exponent Sign      |    1 | 0 = positive (1), 1 = negative (-1) |
+| Significand Sign   |    1 | 0 = positive (1), 1 = negative (-1) |
 
-`exponent magnitude` is an absolute integer value representing (10 ^ exponent). The `exponent sign` determines whether the exponent is multiplied by `1` or `-1`. Similarly, `significand sign` determines the sign of the [significand](#significand-structure).
+`exponent magnitude` is an absolute integer value that gets multiplied by the `exponent sign` to produce an exponent representing 10ᵉˣᵖᵒⁿᵉⁿᵗ. `significand sign` determines the sign of the [significand](#significand).
 
 
-### Significand Structure
+### Significand
 
-The `significand magnitude` gets multiplied by the `significand sign` and finished exponent to produce the final value.
+The `significand magnitude` is an absolute integer value encoded as a [ULEB128](https://en.wikipedia.org/wiki/LEB128). It gets multiplied by the `significand sign` and 10ᵉˣᵖᵒⁿᵉⁿᵗ to produce the final value.
 
 | Field                 | Bits |
 | --------------------- | ---- |
@@ -74,6 +106,8 @@ The `significand magnitude` gets multiplied by the `significand sign` and finish
 
 Significand values larger than 127 follow standard ULEB128 encoding rules (for example, 128 is encoded as `[80 01]`).
 
+
+### Examples
 
 **Example**: Value 0.1
 
@@ -107,74 +141,36 @@ Significand values larger than 127 follow standard ULEB128 encoding rules (for e
 
 
 
-Special Values
---------------
-
-Special values are special 1 or 2 byte sequences that **MUST** be checked against before attempting to decode as a general case [exponent structure](#exponent-structure).
-
-
-### Zero
-
-Zero values (±0) are encoded as follows:
-
-    00000010 = [02] = +0
-    00000011 = [03] = -0
-
-(Interpreted as an expont structure, this would correspond to an exponent value of `-0`, which is an otherwise impossible value)
-
-
-### Infinity
-
-Infinity is encoded as follows:
-
-    10000010 00000000 = [82 00] = +infinity
-    10000011 00000000 = [83 00] = -infinity
-
-These values would normally decode as ULEB128 to values `2` and `3`, the only difference being that they are artificially extended by 1 group. Decoders **MUST** therefore check for the sequences `82 00` and `83 00` before moving on to the general encoding.
-
-
-### NaN
-
-NaN (not-a-number) is encoded as follows:
-
-    10000000 00000000 = [80 00] = Quiet NaN
-    10000001 00000000 = [81 00] = Signaling NaN
-
-These values would normally decode as ULEB128 to values `0` and `1`, the only difference being that they are artificially extended by 1 group. Decoders **MUST** therefore check for the sequences `80 00` and `81 00` before moving on to the general encoding.
-
-
-
 Rounding
 --------
 
 When rounding for storage in compact float format, values **MUST** default to rounding using IEEE754's **round half to even** method (also known as banker's rounding), unless all sending and receiving parties have agreed to another method.
 
-
 **Example**: Binary float value ~ 0.5083299875259399, rounded to 4 significant digits
 
-Binary floats are rarely directly representable in base 10. If we took the value 0.5083299875259399 as-is, we would be encoding many digits of false precision. For the purposes of this example we assume that, after auditing our measurement accuracy and precision requirements, we settle upon 4 significant digits, representing the value as 0.5083.
+Binary floats are rarely directly representable in base 10, and usually the conversion results in many more, possibly even infinite significant digits. If we took the value 0.5083299875259399 as-is, we would be encoding many digits of [false precision](https://en.wikipedia.org/wiki/False_precision). For the purposes of this example we assume that, after auditing our measurement accuracy and precision requirements, we settle upon 4 significant digits (thus our effective value would be 0.5083, or 5083 × 10⁻⁴ for the purposes of storing in a compact float).
 
  * Significand: 5083
  * Exponent: -4
 
-Exponent field contents:
+Exponent structure contents (in binary):
 
     Exponent magnitude: 100
     Exponent sign:          1
     Significand sign:         0
-    Total:              100 1 0
+    ---------------------------
+    Complete structure: 100 1 0
 
-Build the exponent ULEB128:
+Binary 00010010 = hex 0x12, which is less than 0x80 (for the purposes of [ULEB128](https://en.wikipedia.org/wiki/LEB128) encoding), so we are done encoding the exponent structure.
 
-    Value: 00010010
-    Hex:   0x12
+Significand contents:
 
-Significand field contents:
-
-    Value:       5083 (0x13db)
+    Value:       5083
+    Hex:         13db
     Binary:      0001 0011 1101 1011
     Groups of 7: 00 0100111 1011011
     As ULEB128:  11011011 00100111
+    --------------------------------
     Hex:         0xdb     0x27
 
 Result: `[12 db 27]`
@@ -192,7 +188,7 @@ For example, the value 4.09104981 rounded to 5 significant digits is 4.0910, whi
     Exponent: -4
     Effective value: 4.091
 
-Encoding 5 significant digits would require 4 bytes. However, since the last digit is 0, it can be removed from the encoding while still resulting in the same effective value:
+Encoding 5 significant digits would require 4 bytes. However, since the last digit is 0, it can be removed from the encoding while still resulting in the same effective value by adjusting the exponent:
 
     Significand: 4091
     Exponent: -3
@@ -214,7 +210,7 @@ When rounding float values, consider what level of precision you actually need; 
 * The fundamental constants of the universe are useful to 32 significant digits.
 * 40 significant digits would allow measuring the entire universe with a margin of error less than the width of a hydrogen atom.
 
-By comparison, ieee754 floating point format stores 7 significant digits for 32-bit values, 16 significant digits for 64-bit values, 34 significant digits for 128-bit values, and a whopping 71 significant digits for 256-bit values!
+IEEE754 floating point format stores 7 significant digits for 32-bit values, 16 significant digits for 64-bit values, 34 significant digits for 128-bit values, and a whopping 71 significant digits for 256-bit values!
 
 Storing values at a higher precision than your measuring system's accuracy leads to [false precision](https://en.wikipedia.org/wiki/False_precision).
 
@@ -237,6 +233,6 @@ Storing more significant digits takes up more space. Here's a breakdown of the e
 License
 -------
 
-Copyright (C) Karl Stenerud
+Copyright (C) 2019 Karl Stenerud
 
 Specification released under Creative Commons Attribution 4.0 International Public License https://creativecommons.org/licenses/by/4.0/
