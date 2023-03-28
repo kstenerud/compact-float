@@ -1,0 +1,36 @@
+dogma_v1 utf-8
+- identifier          = compact_float
+- description         = Compact Float
+- reference           = https://github.com/kstenerud/compact-float
+- dogma_specification = https://github.com/kstenerud/dogma/blob/master/v1/dogma_v1.md
+
+float = normal_form
+      | positive_zero
+      | negative_zero
+      | positive_inf
+      | negative_inf
+      | quiet_nan
+      | signaling_nan
+      ;
+
+normal_form = uleb128(exponent_magnitude & exponent_sign & significand_sign)
+            & uleb128(significand_magnitude)
+            ;
+
+significand_magnitude = any_size_uint;
+exponent_magnitude    = any_size_uint;
+significand_sign      = bit;
+exponent_sign         = bit;
+
+positive_zero = u8(0b00000010);
+negative_zero = u8(0b00000011);
+positive_inf  = u8(0b10000010) & u8(0b00000000);
+negative_inf  = u8(0b10000011) & u8(0b00000000);
+quiet_nan     = u8(0b10000000) & u8(0b00000000);
+signaling_nan = u8(0b10000001) & u8(0b00000000);
+
+bit           = uint(1,~);
+u8            = uint(8,~);
+any_size_uint = uint(~,~);
+
+uleb128(expr: bits): bits = """https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128""";
