@@ -1,8 +1,8 @@
 dogma_v1 utf-8
-- identifier          = compact_float
-- description         = Compact Float
-- reference           = https://github.com/kstenerud/compact-float
-- dogma_specification = https://github.com/kstenerud/dogma/blob/master/v1/dogma_v1.md
+- identifier  = compact_float
+- description = Compact Float
+- reference   = https://github.com/kstenerud/compact-float
+- dogma       = https://github.com/kstenerud/dogma/blob/master/v1/dogma_v1.md
 
 float = normal_form
       | positive_zero
